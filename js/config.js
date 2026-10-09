@@ -50,6 +50,20 @@ export const AIRCRAFT = {
     gun: { rate: 18, vel: 1150, dmg: 8, spread: 0.0025, mag: 180, reload: 2.6 },
     cam: { dist: 30, height: 6, cockpit: [0, 1.05, -7.6] },
   },
+  // Not an aircraft. No wings; steers by swivelling its engines (tvc) and ignores the altitude ceiling.
+  rocket: {
+    name: 'Tin Can', role: 'Reusable booster', color: '#eceff2', rocket: true,
+    blurb: 'Not technically an aircraft. No wings, steers by swivelling its engines, and has legs, so in theory it lands. Point it up.',
+    stats: { speed: 9, agility: 3, armor: 7 },
+    vstall: 150, vmax: 520, vref: 220, trimSpeed: 240, thrust: 30, abThrust: 20, spool: 1.4, qMax: 2, tvc: 1,
+    cl0: 0, cla: 0.6, aCrit: 1.4, aCritNeg: -1.4, stickAlpha: 0.5, ind: 0.02,
+    pitchStab: 1.5, pitchDamp: 2, rollAuth: 2, rollDamp: 2, yawAuth: 1, yawStab: 1.5, yawDamp: 2, dihedral: 0,
+    sideK: 0.4, maxG: 12, minG: -6, stallCtrl: 1, buffet: 0, spin: 0,
+    hp: { body: 150, wing: 40 },
+    hit: { r: 23, body: [[-19, 2.3], [-10, 2.3], [0, 2.3], [9, 2.3], [17, 2.3]], wingX: 2.7, wingZ: -12, wingR: 1.3 },
+    gun: { rate: 7, vel: 900, dmg: 12, spread: 0.008, mag: 60, reload: 3 },
+    cam: { dist: 75, height: 12, cockpit: [0, 0.6, -19.5] },
+  },
   // Easter egg: not in AIRCRAFT_ORDER until unlocked from the menu.
   blackbird: {
     name: 'Blackbird', role: 'Mach 3 reconnaissance', color: '#1e2126', hidden: true,
@@ -98,7 +112,7 @@ export const AIRCRAFT = {
   },
 };
 
-export const AIRCRAFT_ORDER = ['fighter', 'lancer', 'trainer', 'airliner', 'sandbox'];
+export const AIRCRAFT_ORDER = ['fighter', 'lancer', 'trainer', 'airliner', 'sandbox', 'rocket'];
 export const SANDBOX_DEFAULT = { speed: 220, control: 1, stall: 3 };
 export const SWATCHES = ['#8b99ab', '#e7b13b', '#e9edf2', '#5fd4c3', '#d9534f', '#3f7fd8', '#6bbf59', '#2f3540', '#f08cc0', '#ff8c3a'];
 
@@ -136,6 +150,8 @@ export function buildSpec(id, sandboxCfg) {
   const clTrim = G / (s.liftK * s.trimSpeed * s.trimSpeed);
   s.trimAlpha = (clTrim - s.cl0) / s.cla;
   s.pitchAuth = (s.stickAlpha - s.trimAlpha) * s.pitchStab;
+  // with flight assist off the stick can drag the wing well past the stall
+  s.pitchAuthMax = (Math.max(s.stickAlpha, s.aCrit * 1.35) - s.trimAlpha) * s.pitchStab;
   s.gWindow = Math.min(1.5, s.maxG * 0.2);
   s.gWindowNeg = Math.min(1, -s.minG * 0.4);
   return s;

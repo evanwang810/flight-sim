@@ -6,6 +6,7 @@ import { COL } from './fx.js';
 const MAX = 1400;
 const BULLET_LIFE = 0.85;
 const HIT_SCALE = 1.4; // generous hitboxes
+const PILOT_R = 0.15; // a headshot needs an almost perfect round
 const GRAV = 9.81;
 
 const MISSILE = { burn: 2.4, accel: 150, top: 640, life: 7.5, gBurn: 24, gCoast: 13, gimbal: 1.2, fuse: 10 };
@@ -58,7 +59,7 @@ export class Combat {
     this.game = game;
     this.n = 0;
     this.p = new Float32Array(MAX * 3); this.v = new Float32Array(MAX * 3);
-    this.life = new Float32Array(MAX); this.auth = new Uint8Array(MAX); this.owner = new Array(MAX);
+    this.life = new Float32Array(MAX); this.auth = new Uint8Array(MAX); this.owner = new Array(MAX); this.bent = new Uint8Array(MAX);
     this.missiles = [];
     this.flares = [];
     this.meshes = [];
@@ -76,14 +77,14 @@ export class Combat {
     const i = this.n++;
     this.p[i * 3] = pos.x; this.p[i * 3 + 1] = pos.y; this.p[i * 3 + 2] = pos.z;
     this.v[i * 3] = vel.x; this.v[i * 3 + 1] = vel.y; this.v[i * 3 + 2] = vel.z;
-    this.life[i] = BULLET_LIFE; this.auth[i] = auth ? 1 : 0; this.owner[i] = owner;
+    this.life[i] = BULLET_LIFE; this.auth[i] = auth ? 1 : 0; this.owner[i] = owner; this.bent[i] = 0;
   }
 
   remove(i) {
     const l = --this.n;
     if (i === l) return;
     for (let k = 0; k < 3; k++) { this.p[i * 3 + k] = this.p[l * 3 + k]; this.v[i * 3 + k] = this.v[l * 3 + k]; }
-    this.life[i] = this.life[l]; this.auth[i] = this.auth[l]; this.owner[i] = this.owner[l];
+    this.life[i] = this.life[l]; this.auth[i] = this.auth[l]; this.owner[i] = this.owner[l]; this.bent[i] = this.bent[l];
   }
 
   // Forgiving gunnery: if a round is going to pass close to an enemy, bend it in. The capture radius grows
@@ -108,17 +109,24 @@ export class Combat {
     }
     if (best >= 1) return;
     const g = Math.min(2 * dt / (bt * bt), 1 / bt);
+    this.bent[i] = 1;
     v[i3] += mx * g; v[i3 + 1] += my * g; v[i3 + 2] += mz * g;
   }
 
   // Segment from a (at frame start) to b (at frame end), tested in the plane's own moving frame.
-  hitTest(pl, ax, ay, az, bx, by, bz, scale = HIT_SCALE) {
+  // pilot: also test a tiny unscaled sphere at the pilot's head (only for rounds the magnetism never touched)
+  hitTest(pl, ax, ay, az, bx, by, bz, scale = HIT_SCALE, pilot = false) {
     const h = pl.spec.hit;
     _a.set(ax - pl.prevPos.x, ay - pl.prevPos.y, az - pl.prevPos.z);
     _b.set(bx - pl.air.pos.x, by - pl.air.pos.y, bz - pl.air.pos.z);
     if (segSphere(_a, _b, 0, 0, 0, h.r * scale) < 0) return null;
     _inv.copy(pl.air.quat).invert();
     _a.applyQuaternion(_inv); _b.applyQuaternion(_inv);
+    if (pilot) {
+      const ck = pl.spec.cam.cockpit;
+      const t = segSphere(_a, _b, ck[0], ck[1] - 0.1, ck[2], PILOT_R);
+      if (t >= 0) return { part: 'pilot', t };
+    }
     let best = 2, part = null;
     for (const [z, r] of h.body) {
       const t = segSphere(_a, _b, 0, 0, z, r * scale);
@@ -152,7 +160,7 @@ export class Combat {
       if (m.target !== owner || !m.guided) continue;
       const d = m.pos.distanceTo(owner.air.pos);
       const p = d < 1800 ? 0.75 : 0.35;
-      if (hash01(m.id + '/' + seq) < p) m.target = f;
+      if (hash01(m.id + '/' + seq) < p) { m.target = f; m.decoyed = true; if (owner.isMe) this.game.ach.event('flare'); }
     }
     return f;
   }
@@ -177,7 +185,7 @@ export class Combat {
       if (this.auth[i]) {
         for (const pl of planes) {
           if (!pl.alive || pl === owner || (owner.team && pl.team === owner.team)) continue;
-          const hit = this.hitTest(pl, ax, ay, az, bx, by, bz);
+          const hit = this.hitTest(pl, ax, ay, az, bx, by, bz, HIT_SCALE, !this.bent[i]);
           if (hit) {
             _t.set(ax + (bx - ax) * hit.t, ay + (by - ay) * hit.t, az + (bz - az) * hit.t);
             g.bulletHit(owner, pl, hit.part, _t);
@@ -231,7 +239,10 @@ export class Combat {
         const tti = dist / Math.max(200, speed);
         _t.copy(tpos).addScaledVector(tvel, Math.min(tti, 3) * 0.85).sub(m.pos).normalize();
         const off = Math.acos(Math.min(1, Math.max(-1, _t.dot(fwd))));
-        if (off > MISSILE.gimbal) m.guided = false;
+        if (off > MISSILE.gimbal) {
+          m.guided = false;
+          if (tgt.isMe && !m.decoyed && dist < 1200) this.game.ach.event('dodge');
+        }
         else {
           const maxTurn = (m.t < MISSILE.burn ? MISSILE.gBurn : MISSILE.gCoast) * 9.81 / speed * dt;
           if (off > 1e-5) {

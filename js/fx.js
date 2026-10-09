@@ -623,6 +623,7 @@ export class FX {
     for (let i = this.deb.length - 1; i >= 0; i--) {
       const d = this.deb[i];
       d.life -= dt;
+      d.age = (d.age || 0) + dt;
       d.v.y -= 9.81 * dt; d.v.multiplyScalar(1 - 0.15 * dt);
       d.p.addScaledVector(d.v, dt);
       d.a.x += d.r.x * dt; d.a.y += d.r.y * dt; d.a.z += d.r.z * dt;

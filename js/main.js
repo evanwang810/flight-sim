@@ -7,6 +7,7 @@ import { Game } from './game.js';
 import { Menu } from './menu.js';
 import { Net } from './net.js';
 import { ReplayUI } from './replay.js';
+import { ach } from './achievements.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
 import { settings, save, loadout } from './settings.js';
@@ -153,6 +154,7 @@ function makeNet() {
   net = new Net({
     onStatus: (t) => menu.setStatus(t),
     onLobby: (lobby) => {
+      if (net.isHost) ach.event('host', lobby.players.filter((p) => !p.bot).length);
       menu.showLobby(true);
       menu.renderLobby(lobby, net.myId, net.isHost);
       if (lobby.phase === 'lobby' && state !== 'menu') { toMenu('mp'); return; }
@@ -160,7 +162,7 @@ function makeNet() {
       if (game.online && lobby.phase === 'match') syncRoster(lobby.players);
     },
     onStart: (match, roster, myId, late) => startOnline(match, roster, myId, late),
-    onEnd: (res) => { game.over = true; showResults(res, net.isHost ? 'host' : 'client'); },
+    onEnd: (res) => { game.over = true; if (res.winner && res.winner === net.myId) ach.event('win'); showResults(res, net.isHost ? 'host' : 'client'); },
     onScores: (b) => { hud.scores = b; },
     onClosed: (reason) => {
       net = null;
@@ -244,6 +246,7 @@ function watchReplay() {
   hud.show(false);
   menu.hide();
   replayUI.open(game.startReplay(data));
+  ach.event('replay');
 }
 
 function exitReplay() {

@@ -100,6 +100,8 @@ function trainer(pal) {
     body, wing, prop, propZ: -3.52, propR: 1.08,
     tips: [new THREE.Vector3(-5.3, 0.8, 0.4), new THREE.Vector3(5.3, 0.8, 0.4)],
     exhaust: [new THREE.Vector3(0.5, -0.4, -2.4)], guns: [new THREE.Vector3(-2.4, 0.6, -0.9), new THREE.Vector3(2.4, 0.6, -0.9)],
+    contacts: [[-1.15, -1.55, 0.3, 'gear'], [1.15, -1.55, 0.3, 'gear'], [0, -1.4, -2.4, 'gear'], [-5.3, 0.8, 0.2, 'wl'], [5.3, 0.8, 0.2, 'wr'],
+      [0, 0, -3.5, 'body'], [0, 0.1, 4.3, 'body'], [0, 1.85, 4.1, 'body'], [0, 1.1, 0, 'body']],
     pylons: [new THREE.Vector3(-2.0, 0.45, 0.2), new THREE.Vector3(2.0, 0.45, 0.2)], missileScale: 0.7, length: 8,
   };
 }
@@ -126,6 +128,8 @@ function fighter(pal, swept) {
   return {
     body, wing, flame: flameGeo(0.45, 4.5), flameZ: 8.0,
     tips, exhaust: [new THREE.Vector3(0, 0, 8.3)], guns: [new THREE.Vector3(0.7, 0.3, -5.5)],
+    contacts: [[-1.4, -1.15, 1.5, 'gear'], [1.4, -1.15, 1.5, 'gear'], [0, -1.15, -4.5, 'gear'], [tips[0].x, -0.1, tips[0].z, 'wl'], [tips[1].x, -0.1, tips[1].z, 'wr'],
+      [0, 0, -8, 'body'], [0, 0.4, 7.6, 'body'], [0, 3.2, 7, 'body'], [0, 0.9, -3.6, 'body']],
     pylons: [new THREE.Vector3(-2.6, -0.42, swept ? 0.8 : 1.6), new THREE.Vector3(2.6, -0.42, swept ? 0.8 : 1.6)], missileScale: 1, length: 15,
   };
 }
@@ -144,6 +148,8 @@ function lancer(pal) {
     body, wing, flame: flameGeo(0.55, 6, [-0.62, 0.62]), flameZ: 11.9,
     tips: [new THREE.Vector3(-6.4, -0.25, 7.2), new THREE.Vector3(6.4, -0.25, 7.2)],
     exhaust: [new THREE.Vector3(-0.62, -0.05, 12.3), new THREE.Vector3(0.62, -0.05, 12.3)], guns: [new THREE.Vector3(0.9, 0.35, -8.5)],
+    contacts: [[-1.5, -1.3, 3, 'gear'], [1.5, -1.3, 3, 'gear'], [0, -1.2, -6.5, 'gear'], [-6.4, -0.25, 7.2, 'wl'], [6.4, -0.25, 7.2, 'wr'],
+      [0, 0, -13.4, 'body'], [0, 0, 12, 'body'], [0, 4.8, 10.6, 'body'], [0, 1.1, -6.6, 'body']],
     pylons: [new THREE.Vector3(-3.0, -0.55, 4.5), new THREE.Vector3(3.0, -0.55, 4.5)], missileScale: 1.1, length: 25,
   };
 }
@@ -164,7 +170,32 @@ function blackbird(pal) {
     body, wing, flame: flameGeo(0.95, 9, [-4.4, 4.4]), flameZ: 13.6,
     tips: [new THREE.Vector3(-9.2, -0.05, 10.8), new THREE.Vector3(9.2, -0.05, 10.8)],
     exhaust: [new THREE.Vector3(-4.4, 0, 14), new THREE.Vector3(4.4, 0, 14)], guns: [new THREE.Vector3(0.9, 0.2, -12)],
+    contacts: [[-2, -1.4, 3, 'gear'], [2, -1.4, 3, 'gear'], [0, -1.2, -9, 'gear'], [-9.2, 0, 10.8, 'wl'], [9.2, 0, 10.8, 'wr'],
+      [0, 0, -17.4, 'body'], [0, 0, 15.5, 'body'], [-4.4, -1.2, 3.6, 'wl'], [4.4, -1.2, 3.6, 'wr'], [0, 0.9, -11, 'body']],
     pylons: [new THREE.Vector3(-2.2, -0.75, 3), new THREE.Vector3(2.2, -0.75, 3)], missileScale: 1.1, length: 33,
+  };
+}
+
+function rocket(pal) {
+  const body = new Parts(pal), wing = new Parts(pal);
+  body.add(lathe([[-18.5, 1.8], [14, 1.8], [14.6, 1.95], [18.6, 1.95], [21.2, 0.7], [22, 0.0]], 14), 'body');
+  body.add(new THREE.CylinderGeometry(1.84, 1.84, 3.2, 14, 1, true).rotateX(Math.PI / 2), 'dark', 0, 0, -11.5);
+  body.add(new THREE.CylinderGeometry(1.86, 1.7, 1.6, 14, 1, true).rotateX(Math.PI / 2), 'dark', 0, 0, 17.8);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    body.add(new THREE.ConeGeometry(0.42, 1.1, 8, 1, true).rotateX(-Math.PI / 2), 'metal', i * 0.95, j * 0.95, 19.1);
+  }
+  // folded landing legs and the two grid fins that are not counted as "wings"
+  for (const [x, y] of [[0, 1.9], [0, -1.9], [1.9, 0], [-1.9, 0]]) body.add(new THREE.BoxGeometry(0.35, 0.35, 9), 'dark', x * 1.05, y * 1.05, 13.5, x * 0.03, -y * 0.03, 0);
+  body.add(new THREE.BoxGeometry(0.1, 1.4, 1.2), 'dark', 0, 2.5, -12);
+  body.add(new THREE.BoxGeometry(0.1, 1.4, 1.2), 'dark', 0, -2.5, -12);
+  wing.add(new THREE.BoxGeometry(1.4, 0.1, 1.2), 'dark', 2.5, 0, -12);
+  return {
+    body, wing, flame: flameGeo(1.5, 16, [0]), flameZ: 19.5, rocket: true,
+    tips: [new THREE.Vector3(-3.2, 0, -12), new THREE.Vector3(3.2, 0, -12)],
+    exhaust: [new THREE.Vector3(0, 0, 20)], guns: [new THREE.Vector3(1.95, 0, -8)],
+    pylons: [new THREE.Vector3(-2.1, -1, 2), new THREE.Vector3(2.1, -1, 2)], missileScale: 1.2, length: 40,
+    contacts: [[3.4, 0, 19.4, 'gear'], [-3.4, 0, 19.4, 'gear'], [0, 3.4, 19.4, 'gear'], [0, -3.4, 19.4, 'gear'], [-3.2, 0, -12, 'wl'], [3.2, 0, -12, 'wr'],
+      [0, 0, -22, 'body'], [1.9, 0, -2, 'body'], [-1.9, 0, -2, 'body'], [0, 1.9, -2, 'body'], [0, -1.9, -2, 'body'], [0, 1.9, 10, 'body'], [0, -1.9, 10, 'body']],
   };
 }
 
@@ -184,6 +215,8 @@ function airliner(pal) {
     body, wing,
     tips: [new THREE.Vector3(-17.3, -0.8, 5.5), new THREE.Vector3(17.3, -0.8, 5.5)],
     exhaust: [new THREE.Vector3(-6.6, -2.2, 0), new THREE.Vector3(6.6, -2.2, 0)], guns: [new THREE.Vector3(0, -1.6, -17.5)],
+    contacts: [[-4, -2.6, 2, 'gear'], [4, -2.6, 2, 'gear'], [0, -2.5, -14, 'gear'], [-17.5, -0.9, 6, 'wl'], [17.5, -0.9, 6, 'wr'],
+      [-6.6, -3.3, -2.6, 'wl'], [6.6, -3.3, -2.6, 'wr'], [0, 0, -19.3, 'body'], [0, 0, 19, 'body'], [0, 9.5, 18, 'body'], [0, 2, -10, 'body']],
     pylons: [new THREE.Vector3(-10, -1.6, 1.5), new THREE.Vector3(10, -1.6, 1.5)], missileScale: 1.4, length: 38,
   };
 }
@@ -208,7 +241,7 @@ function split(g) {
   });
 }
 
-const BUILD = { trainer, fighter: (p) => fighter(p, false), sandbox: (p) => fighter(p, true), airliner, lancer, blackbird };
+const BUILD = { trainer, fighter: (p) => fighter(p, false), sandbox: (p) => fighter(p, true), airliner, lancer, blackbird, rocket };
 const cache = new Map();
 
 function geometries(type, color) {
@@ -269,7 +302,7 @@ export class PlaneModel {
     if (this.prop) this.prop.rotation.z += dt * (6 + throttle * 34);
     if (this.flame) {
       const flick = 0.92 + Math.sin(this.t * 47) * 0.05 + Math.sin(this.t * 31) * 0.04;
-      const k = ab > 0.05 ? (0.55 + ab * 0.65) * flick : Math.max(0, throttle - 0.55) * 0.5;
+      const k = this.info.rocket ? (throttle * 0.75 + ab * 0.5) * flick : ab > 0.05 ? (0.55 + ab * 0.65) * flick : Math.max(0, throttle - 0.55) * 0.5;
       this.flame.visible = k > 0.02;
       this.flame.scale.set(0.8 + ab * 0.3, 0.8 + ab * 0.3, k);
     }

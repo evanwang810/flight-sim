@@ -1,6 +1,7 @@
 // Menus: main, singleplayer setup, multiplayer connect and lobby, settings, pause, results.
 import { AIRCRAFT, AIRCRAFT_ORDER, MODES, SKILLS, SWATCHES, SANDBOX_DEFAULT, SECRET, MAX_PLAYERS, MAX_BOTS } from './config.js';
 import { input } from './input.js';
+import { ach } from './achievements.js';
 import { MAPS } from './world/biomes.js';
 import { settings, save, ACTIONS, keyName, resetKeys } from './settings.js';
 
@@ -64,7 +65,6 @@ function picker(root, onChange) {
   let locked = null;
 
   const order = planeOrder();
-  tabs.style.gridTemplateColumns = `repeat(${order.length}, 1fr)`;
   tabs.classList.toggle('many', order.length > 5);
   const tabBtns = order.map((id) => {
     const b = el('button', null, AIRCRAFT[id].name);
@@ -213,6 +213,13 @@ export class Menu {
     seg($('set-mode'), [['mouse', 'Mouse aim'], ['keyboard', 'Keyboard']], () => c.mode, (v) => { c.mode = v; save(); modeNote(); });
     modeNote();
     seg($('set-invert'), [[false, 'Off'], [true, 'On']], () => c.invert, (v) => { c.invert = v; save(); });
+    const assistNote = () => {
+      $('set-assist-note').textContent = c.assist
+        ? 'The autopilot keeps you out of stalls and the g-limiter protects the airframe.'
+        : 'No stall protection and no g-limiter. Yank too hard and you will spin, or bend the wings off.';
+    };
+    seg($('set-assist'), [[true, 'On'], [false, 'Off']], () => c.assist, (v) => { c.assist = v; save(); assistNote(); });
+    assistNote();
     $('set-sens').value = c.sens;
     $('set-sens').oninput = () => { c.sens = +$('set-sens').value; save(); };
     $('set-vol').value = g.volume;
@@ -248,6 +255,7 @@ export class Menu {
       this.mpPicker = picker($('mp-plane'), () => h.onLoadout());
       h.onLoadout();
       $('best').textContent = 'Something very fast just rolled out of the hangar.';
+      ach.event('blackbird');
     });
   }
 
@@ -259,7 +267,8 @@ export class Menu {
   go(id, keepReturn = false) {
     if (id === 'settings' && !keepReturn) this.settingsReturn = 'main';
     this.current = id;
-    const map = { main: 'scr-main', solo: 'scr-solo', mp: 'scr-mp', settings: 'scr-settings', pause: 'scr-pause', results: 'scr-results' };
+    const map = { main: 'scr-main', solo: 'scr-solo', mp: 'scr-mp', settings: 'scr-settings', pause: 'scr-pause', results: 'scr-results', ach: 'scr-ach' };
+    if (id === 'ach') ach.render($('ach-list'));
     for (const [k, sid] of Object.entries(map)) $(sid).hidden = k !== id;
     $('lobby-plane').hidden = !(id === 'mp' && this.inLobby);
     if (id === 'solo') this.soloPicker.render();

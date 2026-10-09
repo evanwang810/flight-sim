@@ -8,6 +8,7 @@ import { PlaneModel, buildCockpit } from './models.js';
 import { Combat, leadDir } from './combat.js';
 import { COL } from './fx.js';
 import { Recorder, Replay } from './replay.js';
+import { ach } from './achievements.js';
 import { think } from './ai.js';
 import { input } from './input.js';
 import { settings } from './settings.js';
@@ -21,7 +22,9 @@ const ENEMY_COLORS = ['#b84a3e', '#a8443f', '#c25e3c', '#9b3b45'];
 
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _u = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3(),
   _ld = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _mz = new THREE.Vector3(), _vel = new THREE.Vector3(),
-  _xa = new THREE.Vector3(1, 0, 0), _ya = new THREE.Vector3(0, 1, 0), _off = new THREE.Vector3(), _eul = new THREE.Euler();
+  _xa = new THREE.Vector3(1, 0, 0), _ya = new THREE.Vector3(0, 1, 0), _off = new THREE.Vector3(), _eul = new THREE.Euler(),
+  _cr = new THREE.Vector3(), _cw = new THREE.Vector3(), _cn = new THREE.Vector3(), _cv = new THREE.Vector3(), _ct = new THREE.Vector3(),
+  _cx = new THREE.Vector3(), _cp = new THREE.Vector3(), _ci = new THREE.Quaternion();
 
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.15;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -74,6 +77,7 @@ export class Game {
   constructor({ scene, camera, world, fx, hud }) {
     this.scene = scene; this.camera = camera; this.world = world; this.fx = fx; this.hud = hud;
     this.combat = new Combat(this);
+    this.ach = ach;
     this.planes = new Map();
     this.planeList = [];
     this.mode = null;
@@ -253,6 +257,7 @@ export class Game {
       this.resetPlane(p, _v, Math.atan2(_v.x - me.air.pos.x, _v.z - me.air.pos.z));
     }
     this.solo.active = true;
+    ach.event('wave', n);
     this.hud.toast(`Wave ${n}`, `${count} ${count === 1 ? 'enemy' : 'enemies'}, ${SKILLS[skill].name.toLowerCase()}`);
   }
 
@@ -298,15 +303,22 @@ export class Game {
       if (act.flare) this.dropFlare(p);
     }
 
+    for (const p of this.planeList) if (p.owned && p.alive) this.damageState(p);
     this.acc += dt;
     while (this.acc >= STEP) {
       this.acc -= STEP;
-      for (const p of this.planeList) if (p.alive && p.owned) p.air.step(STEP, p.ctrl, this.wind);
+      for (const p of this.planeList) {
+        if (!p.alive || !p.owned) continue;
+        p.air.step(STEP, p.ctrl, this.wind);
+        this.contact(p, STEP);
+      }
     }
     for (const p of this.planeList) {
-      if (p.owned) { if (p.alive) { this.collide(p); this.limits(p, dt); } }
+      if (p.owned) { if (p.alive) this.limits(p, dt); }
       else this.interp(p);
     }
+    if (this.show && !this.show.alive) this.resetPlane(this.show, _v.set(0, this.world.map.spawnAlt, 0), 0);
+    if (this.mode !== 'menu') this.collidePlanes(dt);
     if (this.mode !== 'menu') {
       for (const p of this.planeList) this.weapons(p, dt);
       this.combat.update(dt);
@@ -316,13 +328,148 @@ export class Game {
     this.updateCamera(dt);
     this.world.update(dt, this.camera, 2.5);
     this.fx.update(dt, this.world);
+    this.shrapnel();
     if (this.recorder) this.recorder.sample(this.time);
+    if (this.me && this.me.alive && this.mode !== 'menu') ach.tick(this.me, this, dt);
     this.updateAudio();
+  }
+
+  // Damage feeds back into the flight model: a hurt engine coughs and stalls sooner, hurt wings wobble.
+  damageState(p) {
+    const a = p.air, hp = p.spec.hp;
+    a.dmgEngine = clamp(1 - p.hp.body / hp.body, 0, 1);
+    a.dmgL = p.hp.wl <= 0 ? 0 : clamp(1 - p.hp.wl / hp.wing, 0, 1);
+    a.dmgR = p.hp.wr <= 0 ? 0 : clamp(1 - p.hp.wr / hp.wing, 0, 1);
+    a.gLimit = !(p.isMe && !settings.ctl.assist);
+  }
+
+  // Ground and water contact for one physics step. Each contact point pushes back with an impulse; how hard
+  // it hits decides the damage to that part, so a gentle touchdown on the gear is a landing and a nose-first
+  // dive is not. Water drags hard and tears the airframe apart in about half a second.
+  contact(p, h) {
+    const a = p.air, info = p.model.info, w = this.world, water = w.map.water;
+    const k2 = (info.length * 0.3) ** 2;
+    _cw.set(a.q, -a.r, -a.p).applyQuaternion(a.quat);
+    let lift = 0, wet = false, touched = false;
+    for (const c of info.contacts) {
+      if ((c[3] === 'wl' && p.hp.wl <= 0) || (c[3] === 'wr' && p.hp.wr <= 0)) continue;
+      _cr.set(c[0], c[1], c[2]).applyQuaternion(a.quat);
+      _cp.copy(a.pos).add(_cr);
+      const g = w.groundAt(_cp.x, _cp.z);
+      if (water !== null && _cp.y < water && g < water) { wet = true; continue; }
+      const pen = g - _cp.y;
+      if (pen <= 0) continue;
+      touched = true;
+      const e = 2;
+      _cn.set(w.groundAt(_cp.x - e, _cp.z) - w.groundAt(_cp.x + e, _cp.z), 2 * e, w.groundAt(_cp.x, _cp.z - e) - w.groundAt(_cp.x, _cp.z + e)).normalize();
+      _cv.copy(_cw).cross(_cr).add(a.vel);
+      const vn = _cv.dot(_cn);
+      if (vn < 0) {
+        const gear = c[3] === 'gear';
+        _cx.copy(_cr).cross(_cn);
+        const denom = 1 + _cx.lengthSq() / k2;
+        const j = -(1 + (gear ? 0.12 : 0.3)) * vn / denom;
+        a.vel.addScaledVector(_cn, j);
+        _cw.addScaledVector(_cx, j / k2);
+        // friction: wheels roll unless the throttle is closed, everything else scrapes
+        _ct.copy(_cv).addScaledVector(_cn, -vn);
+        const vt = _ct.length();
+        if (vt > 1e-3) {
+          const mu = gear ? (p.ctrl.throttle < 0.08 ? 0.45 : 0.04) : 0.55;
+          const jt = Math.min(mu * j, vt / denom);
+          _ct.multiplyScalar(1 / vt);
+          a.vel.addScaledVector(_ct, -jt);
+          _cx.copy(_cr).cross(_ct);
+          _cw.addScaledVector(_cx, -jt / k2);
+        }
+        const thr = gear ? 4.5 : 2;
+        let dmg = j > thr ? (j - thr) ** 2 * 3 : 0;
+        if (!gear && vt > 15) dmg += vt * h * 0.5;
+        if (dmg > 0.01) {
+          this.damage(p, gear ? 'body' : c[3], gear ? dmg * 0.6 : dmg, null, 'crash');
+          if (dmg > 2 && Math.random() < 0.5) this.fx.groundHit(_cp, Math.min(80, j * 6), 0.4);
+          else if (vt > 20 && Math.random() < 0.2) this.fx.impact(_cp, false);
+          if (!p.alive) return;
+        }
+      }
+      if (pen > lift) lift = pen;
+    }
+    a.pos.y += lift;
+    p.grounded = touched;
+    _ci.copy(a.quat).invert();
+    _cw.applyQuaternion(_ci);
+    a.q = _cw.x; a.r = -_cw.y; a.p = -_cw.z;
+    if (wet) {
+      a.vel.multiplyScalar(Math.exp(-h * 3.5));
+      if (a.vel.y < 0) a.vel.y *= Math.exp(-h * 8);
+      this.damage(p, 'body', p.spec.hp.body * 2.2 * h, null, 'water');
+      if (Math.random() < 0.1) this.fx.splash(_cp.set(a.pos.x, water, a.pos.z), 0.25);
+    }
+  }
+
+  // Mid-air collisions. Each machine only damages the planes it flies, so both sides of a collision agree
+  // without any extra messages.
+  collidePlanes(dt) {
+    for (const p of this.planeList) {
+      if (!p.owned || !p.alive) continue;
+      p.bumpT = (p.bumpT || 0) - dt;
+      if (p.bumpT > 0) continue;
+      for (const q of this.planeList) {
+        if (q === p || !q.alive) continue;
+        const d = p.air.pos.distanceTo(q.air.pos);
+        if (d > (p.spec.hit.r + q.spec.hit.r) * 0.8) continue;
+        const part = this.touching(p, q);
+        if (!part) continue;
+        const rv = _cv.copy(p.air.vel).sub(q.air.vel).length();
+        p.bumpT = 0.5;
+        _cn.copy(p.air.pos).sub(q.air.pos).normalize();
+        p.air.vel.addScaledVector(_cn, Math.min(25, rv * 0.4));
+        this.fx.hit(_cp.copy(p.air.pos).lerp(q.air.pos, 0.5));
+        this.damage(p, part, rv * 1.4, q, 'collision');
+        if (p.alive) this.damage(p, 'body', rv * 0.5, q, 'collision');
+        break;
+      }
+    }
+  }
+
+  // Which part of p overlaps q's airframe, using the unscaled hit spheres.
+  touching(p, q) {
+    const sph = (pl) => {
+      const h = pl.spec.hit, out = h.body.map(([z, r]) => [0, 0, z, r, 'body']);
+      if (pl.hp.wl > 0) out.push([-h.wingX, 0, h.wingZ, h.wingR, 'wl']);
+      if (pl.hp.wr > 0) out.push([h.wingX, 0, h.wingZ, h.wingR, 'wr']);
+      return out.map(([x, y, z, r, part]) => [_cr.set(x, y, z).applyQuaternion(pl.air.quat).add(pl.air.pos).toArray(), r, part]);
+    };
+    const A = sph(p), B = sph(q);
+    for (const [pa, ra, part] of A) for (const [pb, rb] of B) {
+      if ((pa[0] - pb[0]) ** 2 + (pa[1] - pb[1]) ** 2 + (pa[2] - pb[2]) ** 2 < (ra + rb) ** 2) return part;
+    }
+    return null;
+  }
+
+  // Fresh shrapnel that flies through a plane we own nicks it.
+  shrapnel() {
+    const deb = this.fx.deb;
+    if (!deb.length) return;
+    for (const p of this.planeList) {
+      if (!p.owned || !p.alive) continue;
+      const r2 = (p.spec.hit.r * 0.35 + 1) ** 2;
+      for (const d of deb) {
+        if (d.age > 1.5 || d.life <= 0) continue;
+        if (d.p.distanceToSquared(p.air.pos) < r2) { d.life = 0; this.fx.hit(d.p); this.damage(p, 'body', 3, null, 'explosion'); }
+      }
+    }
   }
 
   // Thin air above the ceiling: the engine fades and climbs die out. Outside the arena wall a countdown runs.
   limits(p, dt) {
-    const over = p.air.pos.y - this.ceiling;
+    const over = p.air.pos.y - (p.spec.rocket ? 20000 : this.ceiling);
+    if (!p.air.gLimit && p.air.g > p.spec.maxG * 1.2) {
+      const k = (p.air.g - p.spec.maxG * 1.2) * 14 * dt;
+      this.damage(p, 'wl', k, null, 'crash');
+      if (p.alive) this.damage(p, 'wr', k, null, 'crash');
+      if (p.isMe) this.fx.addShake(0.05);
+    }
     p.air.engine = over > 0 ? Math.max(0, 1 - over / 250) : 1;
     if (over > 0 && p.air.vel.y > 0) p.air.vel.y *= Math.exp(-dt * (0.3 + over / 80));
     const r = Math.hypot(p.air.pos.x, p.air.pos.z);
@@ -352,7 +499,7 @@ export class Game {
 
     const pIn = input.axis('pitchDown', 'pitchUp'), rIn = input.axis('rollLeft', 'rollRight'), yIn = input.axis('yawLeft', 'yawRight');
     if (mouse) {
-      if (me.alive) steer(me.air, this.aimDir, c, true, 1);
+      if (me.alive) steer(me.air, this.aimDir, c, settings.ctl.assist, 1);
       if (pIn) c.pitch = pIn;
       if (rIn) c.roll = rIn;
       if (yIn) c.yaw = yIn;
@@ -382,13 +529,6 @@ export class Game {
     const ang = Math.atan2(_f.dot(_d.crossVectors(_u, _t)), _u.dot(_t));
     this.aim.premultiply(_q.setFromAxisAngle(_f, ang * Math.min(1, dt * 5 * len)));
     this.aim.normalize();
-  }
-
-  collide(p) {
-    const pos = p.air.pos, ground = this.world.groundAt(pos.x, pos.z), water = this.world.map.water;
-    if (water !== null && pos.y < water + 0.5 && ground < water) this.kill(p, null, 'water');
-    else if (pos.y < ground + 1.2) this.kill(p, null, 'crash');
-    if (p === this.show && !p.alive) this.resetPlane(p, _v.set(0, this.world.map.spawnAlt, 0), 0);
   }
 
   // ---------- weapons ----------
@@ -498,6 +638,7 @@ export class Game {
     this.fx.hit(point);
     const dmg = owner.spec.gun.dmg;
     if (owner.isMe) { this.hud.hitMarker(false); audio.blip(2400, 0.025, 0.05); }
+    if (part === 'pilot' && owner.isMe) { this.hud.toast('Headshot', `${target.name}`); audio.blip(3200, 0.2, 0.12); }
     if (target.owned) this.damage(target, part, dmg, owner);
     else if (this.net) this.net.sendHit(target.id, part, dmg, owner.id);
   }
@@ -507,10 +648,10 @@ export class Game {
     if (m.owner && m.owner.isMe) this.hud.hitMarker(true);
     if (!target.owned) return;
     const hp = target.spec.hp;
-    this.damage(target, 'body', hp.body * 0.55, m.owner);
+    this.damage(target, 'body', hp.body * 0.55, m.owner, 'missile');
     if (target.alive) {
       _t.copy(m.pos).sub(target.air.pos).applyQuaternion(_q.copy(target.air.quat).invert());
-      this.damage(target, _t.x < 0 ? 'wl' : 'wr', hp.wing * 0.3, m.owner);
+      this.damage(target, _t.x < 0 ? 'wl' : 'wr', hp.wing * 0.3, m.owner, 'missile');
     }
   }
 
@@ -521,14 +662,15 @@ export class Game {
     this.damage(t, part, dmg, this.planes.get(byId) || null);
   }
 
-  damage(p, part, dmg, by) {
+  damage(p, part, dmg, by, cause = 'shot') {
     if (!p.alive) return;
     if (by) { p.lastAttacker = by; p.lastAttackT = this.time; }
-    if (part === 'body') p.hp.body -= dmg;
+    if (part === 'pilot') { p.hp.body = 0; cause = 'headshot'; }
+    else if (part === 'body') p.hp.body -= dmg;
     else if (part === 'wl') { p.hp.wl -= dmg; if (p.hp.wl <= 0 && !p.air.wingLost) this.loseWing(p, -1); }
     else if (part === 'wr') { p.hp.wr -= dmg; if (p.hp.wr <= 0 && !p.air.wingLost) this.loseWing(p, 1); }
-    if (p.isMe) { this.hud.damage(); this.fx.addShake(0.12); }
-    if (p.hp.body <= 0) this.kill(p, by, 'shot');
+    if (p.isMe && dmg > 0.5) { this.hud.damage(); this.fx.addShake(Math.min(0.5, 0.05 + dmg * 0.01)); }
+    if (p.hp.body <= 0) this.kill(p, by, cause);
   }
 
   loseWing(p, side) {
@@ -550,6 +692,7 @@ export class Game {
     this.explode(p, cause);
     p.respawnT = RESPAWN_TIME;
     if (p.isMe) {
+      ach.death(cause);
       this.cam.deathPos.copy(p.air.pos);
       this.cam.spectate = null;
       this.hud.died(killer && killer !== p ? killer.name : null, cause);
@@ -595,6 +738,14 @@ export class Game {
       if (cause === 'crash') fx.groundHit(a.pos, a.speed, size * 1.6);
     }
     this.sound('boom', a.pos, 1.5 * size);
+    if (this.mode !== 'replay') {
+      const R = 35 * size;
+      for (const o of this.planeList) {
+        if (o === p || !o.owned || !o.alive) continue;
+        const od = o.air.pos.distanceTo(a.pos);
+        if (od < R) this.damage(o, 'body', 55 * size * (1 - od / R) ** 1.5, null, 'explosion');
+      }
+    }
     const d = a.pos.distanceTo(this.camera.position);
     if (d < 900) fx.addShake(Math.min(1.4, 1.6 - d / 600));
   }
@@ -603,7 +754,7 @@ export class Game {
     victim.deaths++;
     if (killer && killer !== victim) killer.kills++;
     this.addFeed(killer && killer !== victim ? killer : null, victim, cause);
-    if (killer && killer.isMe && killer !== victim) { this.solo.kills++; this.hud.hitMarker(true, true); }
+    if (killer && killer.isMe && killer !== victim) { this.solo.kills++; this.hud.hitMarker(true, true); this.myKill(victim, cause); }
     if (this.mode === 'dogfight' && victim.isMe) {
       this.solo.lives--;
       if (this.solo.lives <= 0) { this.solo.overT = 3; victim.respawnT = 0; }
@@ -732,7 +883,13 @@ export class Game {
       v.alive = false;
     }
     this.addFeed(k && k !== v ? k : null, v, cause);
-    if (k && k.isMe && k !== v) this.hud.hitMarker(true, true);
+    if (k && k.isMe && k !== v) { this.hud.hitMarker(true, true); this.myKill(v, cause); }
+  }
+
+  myKill(victim, cause) {
+    const me = this.me;
+    if (!me) return;
+    ach.kill({ cause, dist: victim.air.pos.distanceTo(me.air.pos), hp: me.alive ? me.hp.body / me.spec.hp.body : 0 });
   }
 
   netMissile(ownerId, id, targetId, p, v) {

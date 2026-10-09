@@ -40,6 +40,7 @@
   <div id="hint" hidden>Click to take control</div>
 </div>
 
+<div id="ach-toast"></div>
 <div id="replay" hidden>
   <div class="rp-top">
     <span class="rp-title">Replay</span>
@@ -67,6 +68,7 @@
       <button data-go="solo">Singleplayer</button>
       <button data-go="mp">Multiplayer</button>
       <button data-go="settings">Settings</button>
+      <button data-go="ach">Achievements</button>
       <button id="go-replay" hidden>Last replay</button>
     </nav>
     <p class="foot" id="best"></p>
@@ -164,6 +166,8 @@
             <p class="note" id="set-mode-note"></p>
             <div class="row split"><span>Mouse sensitivity</span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"></div>
             <div class="row split"><span>Invert mouse Y</span><div class="seg small" id="set-invert"></div></div>
+            <div class="row split"><span>Flight assist</span><div class="seg small" id="set-assist"></div></div>
+            <p class="note" id="set-assist-note"></p>
           </div>
         </div>
         <div class="group">
@@ -184,6 +188,13 @@
         <button id="pause-settings">Settings</button>
         <button id="pause-quit">Leave match</button>
       </div>
+    </div>
+  </section>
+
+  <section id="scr-ach" class="screen center" hidden>
+    <div class="card">
+      <header class="bar"><button class="back" data-go="main">Back</button><h2>Achievements</h2></header>
+      <div id="ach-list"></div>
     </div>
   </section>
 

@@ -31,11 +31,13 @@ function defaults() {
     colors,
     sandbox: { ...SANDBOX_DEFAULT },
     gfx: { quality: 'medium', res: 1, blur: false, volume: 0.7 },
-    ctl: { mode: 'mouse', sens: 1, invert: false, keys: Object.fromEntries(ACTIONS.map(([a, , k]) => [a, [...k]])) },
+    ctl: { mode: 'mouse', assist: true, sens: 1, invert: false, keys: Object.fromEntries(ACTIONS.map(([a, , k]) => [a, [...k]])) },
     solo: { mode: 'dogfight', map: 'alpine', wind: 'light', arena: 'medium' },
     host: { mode: 'casual', map: 'alpine', wind: 'light', arena: 'medium', bots: 0, skill: 'normal' },
     bestWave: 0,
     unlocked: false,
+    ach: {},
+    stats: { kills: 0, deaths: 0, flight: 0, top: 0, headshots: 0 },
   };
 }
 
@@ -44,7 +46,10 @@ function merge(base, over) {
   for (const k of Object.keys(base)) {
     if (!(k in over)) continue;
     const b = base[k], o = over[k];
-    if (b && typeof b === 'object' && !Array.isArray(b)) merge(b, o);
+    if (b && typeof b === 'object' && !Array.isArray(b)) {
+      if (!Object.keys(b).length && o && typeof o === 'object') base[k] = { ...o };
+      else merge(b, o);
+    }
     else if (typeof o === typeof b || (Array.isArray(b) && Array.isArray(o))) base[k] = o;
   }
   return base;

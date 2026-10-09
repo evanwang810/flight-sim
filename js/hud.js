@@ -57,7 +57,8 @@ export class HUD {
   damage() { this.dmgFlash = 1; }
 
   died(killer, cause) {
-    this.deathText = killer ? `Shot down by ${killer}` : cause === 'water' ? 'You hit the water' : cause === 'left the area' ? 'You left the combat area' : 'You crashed';
+    this.deathText = cause === 'headshot' ? `${killer} hit you right through the canopy` : killer ? `Shot down by ${killer}`
+      : { water: 'You hit the water', 'left the area': 'You left the combat area', explosion: 'Caught in the blast', collision: 'Mid-air collision' }[cause] || 'You crashed';
   }
 
   update(g, dt) {
@@ -324,8 +325,9 @@ export class HUD {
       const v = document.createElement('b'); v.textContent = f.victim; v.style.color = f.vc;
       if (f.killer) {
         const k = document.createElement('b'); k.textContent = f.killer; k.style.color = f.kc;
-        row.append(k, document.createTextNode('  shot down  '), v);
-      } else row.append(v, document.createTextNode(f.cause === 'water' ? '  hit the water' : f.cause === 'left the area' ? '  left the area' : '  crashed'));
+        const verb = { headshot: '  HEADSHOT  ', collision: '  rammed  ', missile: '  hit with a missile  ', explosion: '  blew up  ' }[f.cause] || '  shot down  ';
+        row.append(k, document.createTextNode(verb), v);
+      } else row.append(v, document.createTextNode({ water: '  hit the water', 'left the area': '  left the area', explosion: '  caught the blast', collision: '  had a mid-air' }[f.cause] || '  crashed'));
       el.appendChild(row);
     }
   }
