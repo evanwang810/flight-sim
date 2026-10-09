@@ -16,7 +16,7 @@ export const FLARES = 3;
 export const MACH = 343;
 // Combat area radius by setting; free flight has no wall. Ceiling is per map (biomes maxH + CEILING).
 export const ARENAS = { small: 3000, medium: 4500, large: 7000 };
-export const CEILING = 2300;
+export const CEILING = 2000;
 
 // Flight model notes:
 //   vstall/vmax/vref in m/s, thrust in m/s^2 (thrust-to-weight * g).

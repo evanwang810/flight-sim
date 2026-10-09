@@ -8,6 +8,21 @@ export const CELL = 16;
 export const CHUNK = 640;
 const SEG = CHUNK / CELL;
 const SEED = 1337;
+// Terrain scale. The biome functions are tuned at 1.0; shrinking height and width together keeps the shapes
+// but puts ridges and valleys closer, which is what makes speed readable.
+export const TERRAIN_SCALE = 0.5;
+
+function scaleMap(m, k) {
+  if (k === 1 || m.grid) return m;
+  return {
+    ...m,
+    height: (x, z) => m.height(x / k, z / k) * k,
+    color: (h, ny, x, z, out) => m.color(h / k, ny, x / k, z / k, out),
+    maxH: m.maxH * k,
+    spawnAlt: Math.max(450, m.spawnAlt * k + 150),
+    sky: { ...m.sky, cloudAlt: m.sky.cloudAlt * 0.7 },
+  };
+}
 
 const QUALITY = {
   low: { radius: 5, clouds: 45, treeLod: 0, trees: 0.6 },
@@ -316,7 +331,7 @@ export class World {
   setMap(id) {
     if (id === this.mapId) return;
     this.mapId = id;
-    this.map = getMap(id);
+    this.map = scaleMap(getMap(id), TERRAIN_SCALE);
     seedNoise(SEED);
     this.hk.fill(0x7fffffff);
     this.clear();
@@ -442,7 +457,7 @@ export class World {
       if (water !== null && h < water + 2) continue;
       const dx = this.groundAt(x + 6, z) - h, dz = this.groundAt(x, z + 6) - h;
       const ny = 6 / Math.hypot(dx, dz, 6);
-      if (hash2(gi * 3 + 1, gj * 7 + 5) > t.pick(h, ny, x, z)) continue;
+      if (hash2(gi * 3 + 1, gj * 7 + 5) > t.pick(h / TERRAIN_SCALE, ny, x / TERRAIN_SCALE, z / TERRAIN_SCALE)) continue;
       const s = 0.7 + hash2(gi + 5, gj + 13) * 0.9;
       m.compose(p.set(x, h - 0.6, z), q.setFromAxisAngle(up, hash2(gi, gj + 3) * 6.28), sc.set(s, s * (0.85 + hash2(gj, gi) * 0.4), s));
       for (let e = 0; e < 16; e++) mats.push(m.elements[e]);
