@@ -30,7 +30,7 @@ function defaults() {
     plane: 'fighter',
     colors,
     sandbox: { ...SANDBOX_DEFAULT },
-    gfx: { quality: 'medium', res: 1, blur: false, volume: 0.7 },
+    gfx: { quality: 'medium', res: 1, blur: false, fog: true, volume: 0.7 },
     ctl: { mode: 'mouse', assist: true, sens: 1, invert: false, keys: Object.fromEntries(ACTIONS.map(([a, , k]) => [a, [...k]])) },
     solo: { mode: 'dogfight', map: 'alpine', wind: 'light', arena: 'medium' },
     host: { mode: 'casual', map: 'alpine', wind: 'light', arena: 'medium', bots: 0, skill: 'normal' },

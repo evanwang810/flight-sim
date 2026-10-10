@@ -351,10 +351,8 @@ export class World {
     this.hemi.color.setHex(s.hemiSky);
     this.hemi.groundColor.setHex(s.hemiGround);
     this.hemi.intensity = s.hemiI * 1.6;
-    const far = this.viewDist;
     this.scene.fog.color.setHex(s.horizon);
-    this.scene.fog.near = far * 0.3;
-    this.scene.fog.far = far;
+    this.setFog(this.fogOn ?? true);
 
     this.water.visible = this.waterFar.visible = this.map.water !== null;
     this.water.position.y = this.map.water ?? 0;
@@ -396,6 +394,14 @@ export class World {
     renderer.render(this.scene, c);
     renderer.clippingPlanes = clip;
     this.water.visible = this.waterFar.visible = true;
+  }
+
+  // Fog off pushes it past the draw distance, so the terrain just ends at the edge of the view.
+  setFog(on) {
+    this.fogOn = on;
+    const far = this.viewDist;
+    this.scene.fog.near = on ? far * 0.3 : 1e6;
+    this.scene.fog.far = on ? far : 1e6 + 1;
   }
 
   // Red grid wall at the edge of the combat area; it only shows up when you get close.

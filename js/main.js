@@ -78,6 +78,7 @@ function resize() {
 
 function applyGraphics() {
   world.setQuality(settings.gfx.quality);
+  world.setFog(settings.gfx.fog);
   fx.setQuality(settings.gfx.quality);
   resize();
 }

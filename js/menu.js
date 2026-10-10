@@ -204,6 +204,7 @@ export class Menu {
     const g = settings.gfx, c = settings.ctl;
     seg($('set-quality'), [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], () => g.quality, (v) => { g.quality = v; save(); h.onGraphics(); });
     seg($('set-res'), [[0.5, '50%'], [0.75, '75%'], [1, '100%']], () => g.res, (v) => { g.res = v; save(); h.onGraphics(); });
+    seg($('set-fog'), [[true, 'On'], [false, 'Off']], () => g.fog, (v) => { g.fog = v; save(); h.onGraphics(); });
     seg($('set-blur'), [[false, 'Off'], [true, 'On']], () => g.blur, (v) => { g.blur = v; save(); h.onGraphics(); });
     const modeNote = () => {
       $('set-mode-note').textContent = c.mode === 'mouse'
