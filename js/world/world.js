@@ -84,12 +84,43 @@ uniform vec3 zenith;
 uniform vec3 horizon;
 uniform vec3 sunColor;
 uniform vec3 sunDir;
+uniform float camH;
+uniform float planetK;
+uniform vec3 land;
+uniform vec3 sea;
 varying vec3 vDir;
+// cheap value noise on the sphere for continents and cloud bands
+float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float n3(vec3 p) {
+  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
 void main() {
   vec3 d = normalize(vDir);
   vec3 col = mix(horizon, zenith, pow(clamp(d.y, 0.0, 1.0), 0.55));
   float s = max(dot(d, sunDir), 0.0);
   col += sunColor * (smoothstep(0.9993, 0.9996, s) * 1.5 + pow(s, 48.0) * 0.25 + pow(s, 5.0) * 0.08);
+  // fake planet below: ray against a sphere of radius R under the camera, faded in with altitude
+  if (planetK > 0.0) {
+    const float R = 1.6e6;
+    float b = (R + camH) * d.y, c = camH * (2.0 * R + camH), disc = b * b - c;
+    float rim = 0.0;
+    if (d.y < 0.0 && disc > 0.0) {
+      float t = -b - sqrt(disc);
+      vec3 n = vec3(d.x * t, R + camH + d.y * t, d.z * t) / R;
+      vec3 q = n * 9.0;
+      float cont = n3(q) * 0.55 + n3(q * 2.3) * 0.3 + n3(q * 5.1) * 0.15;
+      vec3 surf = mix(sea, land, smoothstep(0.5, 0.56, cont));
+      float cloud = smoothstep(0.55, 0.75, n3(n * 14.0 + vec3(3.0)) * 0.6 + n3(n * 31.0) * 0.4);
+      surf = mix(surf, vec3(0.95), cloud * 0.8);
+      float lit = max(dot(n, sunDir), 0.0) * 0.9 + 0.08;
+      float limb = pow(1.0 - max(dot(n, -d), 0.0), 3.0);
+      vec3 p = surf * lit + vec3(0.35, 0.55, 1.0) * limb * 0.6;
+      col = mix(col, p, planetK);
+    } else rim = exp(-max(disc < 0.0 ? sqrt(-disc) : 0.0, 0.0) / (R * 0.02));
+    col += vec3(0.3, 0.5, 1.0) * rim * 0.5 * planetK * step(disc, 0.0);
+  }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
 }`;
@@ -275,6 +306,7 @@ export class World {
     this.skyU = {
       zenith: { value: new THREE.Color() }, horizon: { value: new THREE.Color() },
       sunColor: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) },
+      camH: { value: 0 }, planetK: { value: 0 }, land: { value: new THREE.Color(0x4f6b3a) }, sea: { value: new THREE.Color(0x123c66) },
     };
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12),
       new THREE.ShaderMaterial({ vertexShader: skyVert, fragmentShader: skyFrag, uniforms: this.skyU, side: THREE.BackSide, depthWrite: false, fog: false }));
@@ -581,6 +613,8 @@ export class World {
 
   update(dt, camera, budgetMs = 2.5) {
     const cp = camera.position;
+    this.skyU.camH.value = Math.max(0, cp.y);
+    this.skyU.planetK.value = smoothstep(7000, 18000, cp.y);
     if (this.base) {
       const k = smoothstep(9000, 70000, cp.y);
       if (k !== this.spaceK) {

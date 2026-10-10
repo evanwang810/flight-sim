@@ -468,7 +468,7 @@ export class Game {
   limits(p, dt) {
     const over = p.air.pos.y - (p.spec.rocket ? 400000 : this.ceiling);
     // the pilot is the limit: sustained high g greys you out and then blacks you out for a moment
-    if (p.isMe) {
+    if (p.isMe && !p.spec.rocket) {
       const g = p.air.g;
       if (g > 7.5) p.gStress += (g - 7.5) * 0.12 * dt;
       else if (g < -2.5) p.gStress += (-2.5 - g) * 0.3 * dt;
