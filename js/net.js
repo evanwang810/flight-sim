@@ -16,7 +16,7 @@ const makeCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Mat
 const clampI = (v, a, b) => (v < a ? a : v > b ? b : Math.round(v));
 
 // ---------- binary state records ----------
-// u8 slot, u8 flags (alive, firing), u8 life, u8 missiles, u32 ms, f32 x y z, i16 quat x4, i16 vel x3 (0.1 m/s),
+// u8 slot, u8 flags (alive, firing), u8 life, u8 missiles, u32 ms, f32 x y z, i16 quat x4, i16 vel x3 (0.25 m/s),
 // u8 throttle, u8 afterburner, u16 body hp, u8 left wing, u8 right wing
 export function pack(dv, o, slot, p) {
   const a = p.air;
@@ -30,9 +30,9 @@ export function pack(dv, o, slot, p) {
   dv.setInt16(o + 22, clampI(a.quat.y * 32767, -32767, 32767), true);
   dv.setInt16(o + 24, clampI(a.quat.z * 32767, -32767, 32767), true);
   dv.setInt16(o + 26, clampI(a.quat.w * 32767, -32767, 32767), true);
-  dv.setInt16(o + 28, clampI(a.vel.x * 10, -32767, 32767), true);
-  dv.setInt16(o + 30, clampI(a.vel.y * 10, -32767, 32767), true);
-  dv.setInt16(o + 32, clampI(a.vel.z * 10, -32767, 32767), true);
+  dv.setInt16(o + 28, clampI(a.vel.x * 4, -32767, 32767), true);
+  dv.setInt16(o + 30, clampI(a.vel.y * 4, -32767, 32767), true);
+  dv.setInt16(o + 32, clampI(a.vel.z * 4, -32767, 32767), true);
   dv.setUint8(o + 34, clampI(a.throttle * 255, 0, 255));
   dv.setUint8(o + 35, clampI(a.ab * 255, 0, 255));
   dv.setUint16(o + 36, clampI(p.hp.body, 0, 65535), true);
@@ -46,7 +46,7 @@ export function unpack(dv, o) {
     slot: dv.getUint8(o), ts: dv.getUint32(o + 4, true), a: f & 1, f: (f >> 1) & 1, l: dv.getUint8(o + 2), m: dv.getUint8(o + 3),
     p: [dv.getFloat32(o + 8, true), dv.getFloat32(o + 12, true), dv.getFloat32(o + 16, true)],
     q: [dv.getInt16(o + 20, true) / 32767, dv.getInt16(o + 22, true) / 32767, dv.getInt16(o + 24, true) / 32767, dv.getInt16(o + 26, true) / 32767],
-    v: [dv.getInt16(o + 28, true) / 10, dv.getInt16(o + 30, true) / 10, dv.getInt16(o + 32, true) / 10],
+    v: [dv.getInt16(o + 28, true) / 4, dv.getInt16(o + 30, true) / 4, dv.getInt16(o + 32, true) / 4],
     th: dv.getUint8(o + 34) / 255, ab: dv.getUint8(o + 35) / 255,
     h: [dv.getUint16(o + 36, true), dv.getUint8(o + 38), dv.getUint8(o + 39)],
   };

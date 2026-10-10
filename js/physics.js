@@ -86,8 +86,8 @@ export class Airframe {
     const stalled = this.stalled || broken;
 
     const qd = Math.min((v / s.vref) ** 2, s.qMax);
-    const sq = Math.sqrt(qd);
-    const auth = (stalled ? s.stallCtrl : 1) * (broken ? 0.4 : 1);
+    const sq = Math.pow(qd, 0.3);
+    const auth = (stalled ? s.stallCtrl : 1) * (broken ? 0.15 : 1);
 
     let pitch = clamp(c.pitch, -1, 1);
     if (!this.gLimit) { /* no limiter: pull as hard as you like and live with it */ }
@@ -110,7 +110,7 @@ export class Airframe {
       // autorotation: past the stall the dropping wing loses more lift than the rising one, so roll damping
       // turns into roll drive, yaw follows the roll, and the spinning mass pitches the nose up and holds the stall
       const depth = a > 0 ? smooth(aCrit * 0.75, aCrit * 1.1, a) : smooth(-aCritNeg * 0.75, -aCritNeg * 1.1, -a);
-      const m = Math.min(Math.max(qd, 0.3), 1.6) * (s.spin ?? 1);
+      const m = Math.min(Math.max(qd, 0.3), 1.6) * (s.spin ?? 1) * (a > 0 ? 1 : 0.35);
       dp += depth * m * (14 * this.p * (1 - Math.min(1, Math.abs(this.p) / 3.2)) + 7 * this.r + 2 * s.yawAuth * clamp(c.yaw, -1, 1));
       dr += depth * m * 3 * (0.75 * this.p - this.r) - depth * qd * s.yawStab * this.beta * 0.7;
       dq += depth * m * 1.6 * Math.min(Math.abs(this.p), 3) * Math.sign(a);
@@ -132,14 +132,24 @@ export class Airframe {
       dr += tv * 3.2 * clamp(c.yaw, -1, 1) - 1.4 * this.r;
     }
     if (broken) {
-      const m = Math.max(qd, 0.3);
-      dp += this.wingLost * 6.5 * m;
-      dr += this.wingLost * 1.4 * m;
+      // one wing gone: the other one rolls you over and keeps going
+      const m = Math.max(qd, 0.4);
+      dp += this.wingLost * 15 * m;
+      dr += this.wingLost * 3 * m;
+      dq += 1.5 * m * Math.sin(t * 2.3 + k);
+    }
+    // light turbulence that grows with speed
+    if (qd > 0.8) {
+      const tb = (Math.min(qd, 3) - 0.8) * (s.turb ?? 1);
+      dp += tb * 1.6 * (Math.sin(t * 3.3 + k * 4) + Math.sin(t * 7.9 + k));
+      dq += tb * 0.7 * Math.sin(t * 4.1 + k * 2);
+      dr += tb * 0.5 * Math.sin(t * 2.9 + k * 3);
     }
 
-    this.p = clamp(this.p + dp * dt, -7, 7);
-    this.q = clamp(this.q + dq * dt, -4, 4);
-    this.r = clamp(this.r + dr * dt, -3, 3);
+    const I = s.inertia ?? 1.5;
+    this.p = clamp(this.p + dp / I * dt, -7, 7);
+    this.q = clamp(this.q + dq / I * dt, -4, 4);
+    this.r = clamp(this.r + dr / I * dt, -3, 3);
     _w.set(this.q, -this.r, -this.p);
     const wl = _w.length();
     if (wl > 1e-8) {
@@ -151,14 +161,20 @@ export class Airframe {
     _up.set(0, 1, 0).applyQuaternion(this.quat);
     _right.set(1, 0, 0).applyQuaternion(this.quat);
     let power = this.engine * (1 - 0.5 * this.dmgEngine);
+    if (s.wingEngines) {
+      const L = this.wingLost < 0 ? 0 : 1 - 0.6 * this.dmgL, R = this.wingLost > 0 ? 0 : 1 - 0.6 * this.dmgR;
+      power *= (L + R) / 2;
+      this.engYaw = (L - R) * 0.5;
+    }
     if (this.dmgEngine > 0.3) power *= smooth(-0.6, 0.6, Math.sin(t * 1.3 + k) + Math.sin(t * 3.1 + k * 2) + 1.7 - 2.4 * this.dmgEngine);
     const thrust = this.engineOut ? 0 : (s.thrust * this.throttle + s.abThrust * this.ab) * power;
     _f.copy(_fwd).multiplyScalar(thrust);
+    if (s.wingEngines && this.engYaw) this.r += this.engYaw * thrust * 0.02 * dt;
     if (v > 0.5) {
       _vh.copy(_va).multiplyScalar(1 / v);
       let cl = liftCoef(a, s);
       if (this.stalled && a <= s.aCrit && a >= s.aCritNeg) cl *= 0.75;
-      if (broken) cl *= 0.45;
+      if (broken) cl *= 0.35;
       cl *= 1 - 0.18 * dw;
       const v2 = v * v;
       _lift.copy(_up).addScaledVector(_vh, -_up.dot(_vh));

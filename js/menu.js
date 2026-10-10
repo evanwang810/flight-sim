@@ -1,5 +1,5 @@
 // Menus: main, singleplayer setup, multiplayer connect and lobby, settings, pause, results.
-import { AIRCRAFT, AIRCRAFT_ORDER, MODES, SKILLS, SWATCHES, SANDBOX_DEFAULT, SECRET, MAX_PLAYERS, MAX_BOTS } from './config.js';
+import { AIRCRAFT, AIRCRAFT_ORDER, MODES, SKILLS, SWATCHES, SANDBOX_DEFAULT, SECRETS, MAX_PLAYERS, MAX_BOTS } from './config.js';
 import { input } from './input.js';
 import { ach } from './achievements.js';
 import { MAPS } from './world/biomes.js';
@@ -49,7 +49,7 @@ function mapTiles(root, get, set) {
 }
 
 // Aircraft picker bound to settings.plane / colors / sandbox.
-const planeOrder = () => (settings.unlocked ? [...AIRCRAFT_ORDER, 'blackbird'] : AIRCRAFT_ORDER);
+const planeOrder = () => [...AIRCRAFT_ORDER, ...Object.keys(settings.eggs).filter((k) => settings.eggs[k])];
 
 function picker(root, onChange) {
   root.innerHTML = '';
@@ -242,20 +242,23 @@ export class Menu {
 
     this.updateBest();
 
-    // type the secret word anywhere in the menus to open the back of the hangar
+    // type a secret word anywhere in the menus to roll a hidden aircraft out of the hangar
     let typed = '';
     addEventListener('keydown', (e) => {
       if (input.active || this.listening || e.target instanceof HTMLInputElement || e.key.length !== 1) return;
-      typed = (typed + e.key.toLowerCase()).slice(-SECRET.length);
-      if (typed !== SECRET || settings.unlocked) return;
-      settings.unlocked = true;
-      settings.plane = 'blackbird';
+      typed = (typed + e.key.toLowerCase()).slice(-12);
+      const word = Object.keys(SECRETS).find((w) => typed.endsWith(w));
+      const id = word && SECRETS[word];
+      if (!id || settings.eggs[id]) return;
+      settings.eggs[id] = true;
+      if (id === 'blackbird') settings.unlocked = true;
+      settings.plane = id;
       save();
       this.soloPicker = picker($('solo-plane'), () => h.onLoadout());
       this.mpPicker = picker($('mp-plane'), () => h.onLoadout());
       h.onLoadout();
-      $('best').textContent = 'Something very fast just rolled out of the hangar.';
-      ach.event('blackbird');
+      $('best').textContent = id === 'rocket' ? 'Something without wings just rolled out of the hangar.' : 'Something very fast just rolled out of the hangar.';
+      ach.event(id === 'rocket' ? 'liftoff' : 'blackbird');
     });
   }
 

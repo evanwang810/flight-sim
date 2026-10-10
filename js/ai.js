@@ -178,12 +178,15 @@ export function think(bot, game, dt) {
     }
   }
   if (air.pos.y > game.ceiling - 350) _aim.y = Math.min(_aim.y, -0.1 - (air.pos.y - game.ceiling + 350) / 500);
-  const clear = 110 + air.speed * 0.6;
+  // heavy, slow-turning aircraft need to see trouble earlier
+  const slug = Math.max(1, (spec.inertia ?? 1.5) / 1.5) * (spec.maxG < 4 ? 1.35 : 1);
+  const clear = (110 + air.speed * 0.6) * slug;
   let danger = 0;
-  for (const s of [0.6, 1.5, 3, 4.5]) {
+  for (const s0 of [0.6, 1.5, 3, 4.5]) {
+    const s = s0 * slug;
     _p.copy(air.pos).addScaledVector(air.vel, s);
     const m = _p.y - world.surfaceAt(_p.x, _p.z);
-    if (m < clear) danger = Math.max(danger, Math.min(1.5, (clear - m) / clear) * (s < 2 ? 1.3 : 1));
+    if (m < clear) danger = Math.max(danger, Math.min(1.5, (clear - m) / clear) * (s0 < 2 ? 1.3 : 1));
   }
   if (danger > 0) {
     _h.set(_f.x, 0, _f.z).normalize().add(_p.set(0, 0.6 + danger * 1.6, 0)).normalize();
@@ -194,7 +197,13 @@ export function think(bot, game, dt) {
 
   _aim.normalize();
   if (!(_aim.lengthSq() > 0.5)) _aim.copy(_f);
+  // never dive steeper than the plane can pull out of before the ground: radius v^2 / (g (n - 1))
+  const agl = air.pos.y - world.surfaceAt(air.pos.x, air.pos.z);
+  const rPull = air.speed * air.speed / (G * (Math.max(1.3, spec.maxG * 0.75) - 1));
+  const maxDive = Math.acos(1 - clamp(agl * 0.45 / rPull, 0, 1));
+  if (_aim.y < -Math.sin(maxDive)) { _aim.y = -Math.sin(maxDive); _aim.normalize(); }
   steer(air, _aim, c, true, aggr);
   if (c.pitch > pull) c.pitch = pull;
+  if (c.pitch < -0.45) c.pitch = -0.45; // bots roll and pull rather than push into negative g
   return act;
 }

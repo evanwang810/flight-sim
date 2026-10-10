@@ -8,6 +8,7 @@ export const CELL = 16;
 export const CHUNK = 640;
 const SEG = CHUNK / CELL;
 const SEED = 1337;
+const SPACE = new THREE.Color(0x03040a);
 // Terrain scale. The biome functions are tuned at 1.0; shrinking height and width together keeps the shapes
 // but puts ridges and valleys closer, which is what makes speed readable.
 export const TERRAIN_SCALE = 0.5;
@@ -341,6 +342,7 @@ export class World {
     const s = this.map.sky;
     this.skyU.zenith.value.setHex(s.zenith);
     this.skyU.horizon.value.setHex(s.horizon);
+    this.base = { zenith: this.skyU.zenith.value.clone(), horizon: this.skyU.horizon.value.clone(), fog: new THREE.Color(s.horizon) };
     this.skyU.sunColor.value.setHex(s.sunColor);
     this.skyU.sunDir.value.set(...s.sun).normalize();
     this.sun.color.setHex(s.sunColor);
@@ -573,6 +575,16 @@ export class World {
 
   update(dt, camera, budgetMs = 2.5) {
     const cp = camera.position;
+    if (this.base) {
+      const k = smoothstep(9000, 70000, cp.y);
+      if (k !== this.spaceK) {
+        this.spaceK = k;
+        const dark = SPACE;
+        this.skyU.zenith.value.copy(this.base.zenith).lerp(dark, k);
+        this.skyU.horizon.value.copy(this.base.horizon).lerp(dark, k * 0.85);
+        this.scene.fog.color.copy(this.base.fog).lerp(dark, k * 0.85);
+      }
+    }
     this.sky.position.copy(cp);
     this.sky.scale.setScalar(camera.far * 0.9);
     if (this.water.visible) {

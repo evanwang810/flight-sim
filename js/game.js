@@ -54,6 +54,7 @@ export class Plane {
     this.lastAttacker = null; this.lastAttackT = -99;
     this.net = { snaps: [], off: null };
     this.magnet = this.isBot ? this.skill.magnet : 1;
+    this.gStress = 0; this.blackout = false;
     this.outT = 0; this.mach = 0; this.trails = null;
     this.setLoadout(o.load);
   }
@@ -198,7 +199,8 @@ export class Game {
   get online() { return !!this.net; }
 
   resetPlane(p, pos, yaw) {
-    p.air.reset(pos, yaw, p.spec.trimSpeed * 1.05);
+    p.air.reset(pos, yaw, p.spec.spawnSpeed ?? p.spec.trimSpeed * 1.05);
+    p.gStress = 0; p.blackout = false;
     p.air.throttle = 0.85;
     p.ctrl.throttle = 0.85;
     p.prevPos.copy(pos);
@@ -463,12 +465,16 @@ export class Game {
 
   // Thin air above the ceiling: the engine fades and climbs die out. Outside the arena wall a countdown runs.
   limits(p, dt) {
-    const over = p.air.pos.y - (p.spec.rocket ? 20000 : this.ceiling);
-    if (!p.air.gLimit && p.air.g > p.spec.maxG * 1.2) {
-      const k = (p.air.g - p.spec.maxG * 1.2) * 14 * dt;
-      this.damage(p, 'wl', k, null, 'crash');
-      if (p.alive) this.damage(p, 'wr', k, null, 'crash');
-      if (p.isMe) this.fx.addShake(0.05);
+    const over = p.air.pos.y - (p.spec.rocket ? 400000 : this.ceiling);
+    // the pilot is the limit: sustained high g greys you out and then blacks you out for a moment
+    if (p.isMe) {
+      const g = p.air.g;
+      if (g > 7.5) p.gStress += (g - 7.5) * 0.12 * dt;
+      else if (g < -2.5) p.gStress += (-2.5 - g) * 0.3 * dt;
+      else p.gStress -= (g < 5 && g > -1 ? 0.3 : 0.06) * dt;
+      p.gStress = clamp(p.gStress, 0, 1.15);
+      if (p.gStress >= 1) p.blackout = true;
+      else if (p.gStress < 0.55) p.blackout = false;
     }
     p.air.engine = over > 0 ? Math.max(0, 1 - over / 250) : 1;
     if (over > 0 && p.air.vel.y > 0) p.air.vel.y *= Math.exp(-dt * (0.3 + over / 80));
@@ -498,6 +504,7 @@ export class Game {
     this.aimDir.copy(_f);
 
     const pIn = input.axis('pitchDown', 'pitchUp'), rIn = input.axis('rollLeft', 'rollRight'), yIn = input.axis('yawLeft', 'yawRight');
+    if (me.blackout) { c.pitch = c.roll = c.yaw = 0; return; }
     if (mouse) {
       if (me.alive) steer(me.air, this.aimDir, c, settings.ctl.assist, 1);
       if (pIn) c.pitch = pIn;

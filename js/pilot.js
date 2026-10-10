@@ -31,14 +31,16 @@ export function steer(air, aim, out, protect = true, aggression = 1) {
 
   // lead the roll by the airframe's roll time constant so it stops on target
   const qd = Math.min((air.speed / s.vref) ** 2, s.qMax);
-  const lead = 1.15 / (s.rollDamp * Math.sqrt(qd) + 0.3);
+  // the heavier the airframe rotates, the earlier the roll has to be taken out
+  const I = s.inertia ?? 1.5;
+  const lead = 1.15 * I / (s.rollDamp * Math.pow(qd, 0.3) + 0.3);
   out.roll = clamp(2.2 * (bankTo - lead * air.p), -1, 1);
 
   const v = Math.max(air.speed, 15);
   let aFF = (Math.max(0, ay) * G / (s.liftK * v * v) - s.cl0) / s.cla;
   if (protect) aFF = clamp(aFF, s.aCritNeg * 0.8, s.aCrit * 0.9);
   const span = Math.max(0.05, s.stickAlpha - s.trimAlpha);
-  let pitch = (aFF - s.trimAlpha) / span + 3.5 * aggression * pitchErr - 0.4 * air.q;
+  let pitch = (aFF - s.trimAlpha) / span + 3.5 * aggression * pitchErr - 0.4 * I * air.q;
   if (protect) {
     if (pitch > 0 && air.alpha > s.aCrit * 0.86) pitch *= clamp((s.aCrit * 0.96 - air.alpha) / (s.aCrit * 0.1), 0, 1);
     else if (pitch < 0 && air.alpha < s.aCritNeg * 0.8) pitch *= clamp((air.alpha - s.aCritNeg * 0.95) / (-s.aCritNeg * 0.15), 0, 1);
@@ -46,6 +48,6 @@ export function steer(air, aim, out, protect = true, aggression = 1) {
   out.pitch = clamp(pitch, -1, 1);
 
   const fine = 1 - smooth(0.06, 0.25, off);
-  out.yaw = clamp(4 * yawErr * fine + 1.2 * air.beta * (1 - fine) - 0.45 * air.r, -1, 1);
+  out.yaw = clamp(4 * yawErr * fine + 1.2 * air.beta * (1 - fine) - 0.45 * I * air.r, -1, 1);
   return off;
 }

@@ -201,9 +201,11 @@ export class HUD {
     if (slowTick) { this.updateFeed(g); this.updateStatus(g); this.updateDead(g); this.updateBoard(g); }
 
     this.dmgFlash = Math.max(0, this.dmgFlash - dt * 2.5);
-    const gload = me.alive ? Math.max(0, (a.g - me.spec.maxG * 0.7) / (me.spec.maxG * 0.3)) : 0;
-    this.el.vignette.style.opacity = Math.min(1, gload * 0.6 + this.dmgFlash * 0.5).toFixed(2);
-    this.el.vignette.classList.toggle('hurt', this.dmgFlash > gload);
+    const gray = me.alive ? Math.min(1, me.gStress) : 0;
+    this.el.vignette.style.opacity = Math.min(1, Math.max(gray * 0.95, this.dmgFlash * 0.5)).toFixed(2);
+    this.el.vignette.classList.toggle('hurt', this.dmgFlash * 0.5 > gray);
+    this.el.vignette.classList.toggle('red', a.g < -1.5 && gray > 0.1);
+    this.el.vignette.classList.toggle('black', !!me.blackout);
   }
 
   cross(x, cx, cy) {

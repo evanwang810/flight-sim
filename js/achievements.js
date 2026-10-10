@@ -23,7 +23,9 @@ export const ACHIEVEMENTS = [
   ['land', 'Greaser', 'Touch down and roll to a stop in one piece.'],
   ['splash', 'Swimming lessons', 'Find out what happens when you hit the sea.'],
   ['space', 'Escape velocity', 'Take the Tin Can above 10 km.', true],
+  ['orbit', 'Orbital', 'Hit 7.8 km/s. Nothing is stopping you now.', true],
   ['blackbird', 'Back of the hangar', 'Find the hidden aircraft.', true],
+  ['liftoff', 'Way past the hangar', 'Find the other hidden aircraft.', true],
   ['host', 'Air boss', 'Host a room with six or more pilots.'],
   ['win', 'Top of the board', 'Win a multiplayer match.'],
   ['replay', 'Instant replay', 'Watch a replay.'],
@@ -104,6 +106,7 @@ export const ach = {
     if (a.speed > MACH) this.unlock('sound');
     if (a.speed > MACH * 3) this.unlock('mach3');
     if (me.spec.rocket && a.pos.y > 10000) this.unlock('space');
+    if (a.speed > 7800) this.unlock('orbit');
     const agl = a.pos.y - game.world.surfaceAt(a.pos.x, a.pos.z);
     r.low = agl < 15 && kmh > 700 ? r.low + dt : 0;
     if (r.low > 3) this.unlock('low');

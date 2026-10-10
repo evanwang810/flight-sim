@@ -182,6 +182,8 @@ input[type="range"] { accent-color: var(--accent); width: 150px; }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55); font-family: var(--font); }
 #hud-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.9) 100%); }
+#vignette.black { background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.97) 60%); }
+#vignette.red { background: radial-gradient(ellipse at center, rgba(120, 0, 0, 0.25) 30%, rgba(150, 10, 10, 0.9) 100%); }
 #vignette.hurt { background: radial-gradient(ellipse at center, transparent 50%, rgba(160, 20, 10, 0.75) 100%); }
 #feed { position: absolute; left: 18px; top: 16px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 #feed div { background: rgba(8, 12, 18, 0.45); padding: 4px 10px; border-radius: 6px; width: fit-content; animation: feedin 0.25s ease; }
