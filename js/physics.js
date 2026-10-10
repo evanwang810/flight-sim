@@ -38,6 +38,7 @@ export class Airframe {
     this.t = 0;
     // set from outside: damage 0..1 for the engine (body) and each wing, and whether the g-limiter is on
     this.dmgEngine = 0; this.dmgL = 0; this.dmgR = 0; this.gLimit = true;
+    this.gHeavy = false; // the player's controls get heavy and shaky under load
   }
 
   reset(pos, yaw, speed) {
@@ -89,7 +90,12 @@ export class Airframe {
     const sq = Math.pow(qd, 0.3);
     const auth = (stalled ? s.stallCtrl : 1) * (broken ? 0.15 : 1);
 
-    let pitch = clamp(c.pitch, -1, 1);
+    // under load the stick gets heavy and the hand shakes: authority drops and inputs wobble
+    const gk = this.gHeavy ? clamp((Math.abs(this.g - 1) - 2.5) / 6, 0, 1) : 0;
+    const heavy = 1 - 0.5 * gk, shake = gk * 0.3;
+    let pitch = clamp(c.pitch * heavy + shake * Math.sin(this.t * 9.1 + this.seed), -1, 1);
+    const rollIn = clamp(c.roll * heavy + shake * Math.sin(this.t * 7.3 + this.seed * 2), -1, 1);
+    const yawIn = clamp(c.yaw * heavy, -1, 1);
     if (!this.gLimit) { /* no limiter: pull as hard as you like and live with it */ }
     else if (pitch > 0 && this.g > s.maxG - s.gWindow) pitch *= clamp((s.maxG - this.g) / s.gWindow, 0, 1);
     else if (pitch < 0 && this.g < s.minG + s.gWindowNeg) pitch *= clamp((this.g - s.minG) / s.gWindowNeg, 0, 1);
@@ -97,9 +103,9 @@ export class Airframe {
     const pa = pitch >= 0 ? pAuth : pAuth * 0.6;
 
     const stabA = Math.sin(clamp(a - s.trimAlpha, -1.5, 1.5));
-    let dp = qd * (s.rollAuth * clamp(c.roll, -1, 1) * auth - s.dihedral * this.beta) - s.rollDamp * sq * this.p - 0.3 * this.p;
+    let dp = qd * (s.rollAuth * rollIn * auth - s.dihedral * this.beta) - s.rollDamp * sq * this.p - 0.3 * this.p;
     let dq = qd * (pa * pitch * auth - s.pitchStab * stabA * (stalled ? 0.6 : 1)) - s.pitchDamp * sq * this.q - 0.3 * this.q;
-    let dr = qd * (s.yawAuth * clamp(c.yaw, -1, 1) * auth + s.yawStab * this.beta) - s.yawDamp * sq * this.r - 0.3 * this.r;
+    let dr = qd * (s.yawAuth * yawIn * auth + s.yawStab * this.beta) - s.yawDamp * sq * this.r - 0.3 * this.r;
 
     const t = this.t, k = this.seed;
     if (stalled && !broken) {

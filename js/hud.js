@@ -88,6 +88,9 @@ export class HUD {
       if (slowTick) {
         this.set('spd', this.el.spd, Math.round(a.speed * 3.6));
         this.set('alt', this.el.alt, Math.round(a.pos.y - (g.world.map.water ?? 0)));
+        const gv = document.getElementById('gval');
+        this.set('g', gv, a.g.toFixed(1));
+        gv.parentNode.className = 'gread' + (a.g > me.spec.maxG * 0.85 || a.g < -2 ? ' hi' : a.g > 5 ? ' mid' : '');
         this.el.thr.style.height = `${Math.round(a.throttle * 100)}%`;
         this.el.ab.style.opacity = a.ab > 0.1 ? a.ab : 0;
         const gun = me.spec.gun;

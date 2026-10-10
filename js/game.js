@@ -343,6 +343,7 @@ export class Game {
     a.dmgL = p.hp.wl <= 0 ? 0 : clamp(1 - p.hp.wl / hp.wing, 0, 1);
     a.dmgR = p.hp.wr <= 0 ? 0 : clamp(1 - p.hp.wr / hp.wing, 0, 1);
     a.gLimit = !(p.isMe && !settings.ctl.assist);
+    a.gHeavy = p.isMe;
   }
 
   // Ground and water contact for one physics step. Each contact point pushes back with an impulse; how hard
