@@ -119,6 +119,16 @@ export class Game {
     this.world.setLimits(this.arenaR, this.ceiling);
     this.cam.view = 'chase';
     this.me = this.addPlane({ id: o.myId || 'me', name: o.name, load: o.load, owned: true, me: true, team: o.mode === 'dogfight' ? 'blue' : undefined });
+    // planet and space only make sense in free flight
+    this.world.planet = o.mode === 'free';
+    // overdrive cheat (singleplayer): 10x thrust and handling, a bottomless fast gun, no g limits on the pilot
+    if (settings.overdrive && !this.net) {
+      const s = this.me.spec;
+      this.me.spec = { ...s, thrust: s.thrust * 10, abThrust: s.abThrust * 10, inertia: (s.inertia ?? 1.5) / 10, maxG: s.maxG * 2,
+        rollAuth: s.rollAuth * 3, pitchAuth: s.pitchAuth * 3, yawAuth: s.yawAuth * 3, gun: { ...s.gun, rate: s.gun.rate * 5, spread: s.gun.spread * 0.5 } };
+      this.me.air.spec = this.me.spec;
+      this.me.overdrive = true;
+    }
     this.spawn(this.me);
     this.loading = true;
   }
@@ -127,6 +137,7 @@ export class Game {
   showcase(load, mapId) {
     this.stop();
     this.mode = 'menu';
+    this.world.planet = false;
     this.world.setMap(mapId);
     this.windBase = 0; this.time = 0; this.acc = 0; this.paused = false;
     this.arenaR = null; this.ceiling = 1e9; this.recorder = null;
@@ -143,6 +154,7 @@ export class Game {
   startReplay(data) {
     this.stop();
     this.mode = 'replay';
+    this.world.planet = false;
     this.world.setMap(data.map);
     this.windBase = 0; this.time = 0; this.acc = 0; this.paused = false; this.over = true;
     this.arenaR = null; this.ceiling = 1e9;
@@ -469,7 +481,7 @@ export class Game {
   limits(p, dt) {
     const over = p.air.pos.y - (p.spec.rocket ? 400000 : this.ceiling);
     // the pilot is the limit: sustained high g greys you out and then blacks you out for a moment
-    if (p.isMe && !p.spec.rocket) {
+    if (p.isMe && !p.spec.rocket && !p.overdrive) {
       const g = p.air.g;
       if (g > 7.5) p.gStress += (g - 7.5) * 0.12 * dt;
       else if (g < -2.5) p.gStress += (-2.5 - g) * 0.3 * dt;
@@ -562,7 +574,7 @@ export class Game {
       while (p.gunCd <= 0) {
         this.fireRound(p);
         p.gunCd += 1 / gun.rate;
-        if (p.owned && --p.ammo <= 0) { p.reload = gun.reload; break; }
+        if (p.owned && !p.overdrive && --p.ammo <= 0) { p.reload = gun.reload; break; }
       }
     } else if (p.gunCd < 0) p.gunCd = 0;
     if (p.owned) {

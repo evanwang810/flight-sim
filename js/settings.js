@@ -36,6 +36,7 @@ function defaults() {
     host: { mode: 'casual', map: 'alpine', wind: 'light', arena: 'medium', bots: 0, skill: 'normal' },
     bestWave: 0,
     unlocked: false,
+    overdrive: false,
     eggs: { blackbird: false, rocket: false },
     ach: {},
     stats: { kills: 0, deaths: 0, flight: 0, top: 0, headshots: 0 },

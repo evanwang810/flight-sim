@@ -248,6 +248,13 @@ export class Menu {
     addEventListener('keydown', (e) => {
       if (input.active || this.listening || e.target instanceof HTMLInputElement || e.key.length !== 1) return;
       typed = (typed + e.key.toLowerCase()).slice(-12);
+      if (typed.endsWith('overdrive')) {
+        typed = '';
+        settings.overdrive = !settings.overdrive;
+        save();
+        $('best').textContent = settings.overdrive ? 'Overdrive on. Singleplayer only.' : 'Overdrive off.';
+        return;
+      }
       const word = Object.keys(SECRETS).find((w) => typed.endsWith(w));
       const id = word && SECRETS[word];
       if (!id || settings.eggs[id]) return;

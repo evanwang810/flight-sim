@@ -663,7 +663,7 @@ export class World {
     const U = this.skyU;
     U.camH.value = Math.max(0, cp.y);
     U.time.value += dt;
-    U.planetK.value = smoothstep(2500, 14000, cp.y);
+    U.planetK.value = this.planet ? smoothstep(2500, 14000, cp.y) : 0;
     // the planet scrolls under you by however far you have really travelled (see game.planetOff)
     const R = 6.371e6, lon = (cp.x + this.planetOff.x) / R, lat = (cp.z + this.planetOff.y) / R;
     U.planetRot.value.setFromMatrix4(_pr.makeRotationZ(-lon).multiply(_pr2.makeRotationX(lat)));
