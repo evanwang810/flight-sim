@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Contrail</title>
 <meta name="description" content="Low-poly dogfights in the browser. Fly solo against AI waves or with friends over peer-to-peer multiplayer.">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <canvas id="gl"></canvas>
@@ -212,6 +212,33 @@
 
 <noscript><p class="nojs">Contrail needs JavaScript.</p></noscript>
 <script src="vendor/peerjs.min.js"></script>
-<script type="module" src="js/main.js"></script>
+<script type="importmap">
+{
+  "imports": {
+      "./js/achievements.js": "./js/achievements.js?v=2",
+      "./js/ai.js": "./js/ai.js?v=2",
+      "./js/audio.js": "./js/audio.js?v=2",
+      "./js/combat.js": "./js/combat.js?v=2",
+      "./js/config.js": "./js/config.js?v=2",
+      "./js/fx.js": "./js/fx.js?v=2",
+      "./js/game.js": "./js/game.js?v=2",
+      "./js/hud.js": "./js/hud.js?v=2",
+      "./js/input.js": "./js/input.js?v=2",
+      "./js/main.js": "./js/main.js?v=2",
+      "./js/menu.js": "./js/menu.js?v=2",
+      "./js/models.js": "./js/models.js?v=2",
+      "./js/net.js": "./js/net.js?v=2",
+      "./js/physics.js": "./js/physics.js?v=2",
+      "./js/pilot.js": "./js/pilot.js?v=2",
+      "./js/replay.js": "./js/replay.js?v=2",
+      "./js/settings.js": "./js/settings.js?v=2",
+      "./js/three.js": "./js/three.js?v=2",
+      "./js/world/biomes.js": "./js/world/biomes.js?v=2",
+      "./js/world/noise.js": "./js/world/noise.js?v=2",
+      "./js/world/world.js": "./js/world/world.js?v=2"
+  }
+}
+</script>
+<script type="module" src="js/main.js?v=2"></script>
 </body>
 </html>

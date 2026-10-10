@@ -38,7 +38,7 @@ export class Airframe {
     this.t = 0;
     // set from outside: damage 0..1 for the engine (body) and each wing, and whether the g-limiter is on
     this.dmgEngine = 0; this.dmgL = 0; this.dmgR = 0; this.gLimit = true;
-    this.gHeavy = false; // the player's controls get heavy and shaky under load
+    this.gHeavy = 0; // 0..1 from the game: the player's controls get heavy and shaky as they grey out
   }
 
   reset(pos, yaw, speed) {
@@ -91,7 +91,7 @@ export class Airframe {
     const auth = (stalled ? s.stallCtrl : 1) * (broken ? 0.15 : 1);
 
     // under load the stick gets heavy and the hand shakes: authority drops and inputs wobble
-    const gk = this.gHeavy ? clamp((Math.abs(this.g - 1) - 2.5) / 6, 0, 1) : 0;
+    const gk = this.gHeavy;
     const heavy = 1 - 0.5 * gk, shake = gk * 0.3;
     let pitch = clamp(c.pitch * heavy + shake * Math.sin(this.t * 9.1 + this.seed), -1, 1);
     const rollIn = clamp(c.roll * heavy + shake * Math.sin(this.t * 7.3 + this.seed * 2), -1, 1);
