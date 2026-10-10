@@ -114,6 +114,7 @@ export class Game {
     this.solo = { wave: 0, lives: SOLO_LIVES, nextWave: 3, active: false, overT: 0, kills: 0 };
     this.arenaR = o.mode === 'free' ? null : ARENAS[o.arena] || ARENAS.medium;
     this.ceiling = this.world.map.maxH + CEILING;
+    this.world.planetOff.set(0, 0);
     this.recorder = new Recorder(this, o);
     this.world.setLimits(this.arenaR, this.ceiling);
     this.cam.view = 'chase';
@@ -479,6 +480,14 @@ export class Game {
     }
     p.air.engine = over > 0 ? Math.max(0, 1 - over / 250) : 1;
     if (over > 0 && p.air.vel.y > 0) p.air.vel.y *= Math.exp(-dt * (0.3 + over / 80));
+    // in space the map is out of sight, so horizontal travel goes into scrolling the planet instead;
+    // wherever you come back down, you come down over the map
+    if (p.isMe && p.air.pos.y > 40000 && (p.air.pos.x || p.air.pos.z)) {
+      this.world.planetOff.x += p.air.pos.x; this.world.planetOff.y += p.air.pos.z;
+      this.cam.deathPos.x -= p.air.pos.x; this.cam.deathPos.z -= p.air.pos.z;
+      p.air.pos.x = 0; p.air.pos.z = 0; p.prevPos.copy(p.air.pos);
+      this.dropTrails(p);
+    }
     const r = Math.hypot(p.air.pos.x, p.air.pos.z);
     if (this.arenaR && this.mode !== 'menu' && r > this.arenaR) {
       // the clock only runs while heading further out
@@ -964,6 +973,13 @@ export class Game {
       fx.ribbons.feed(p.trails[ne + i], _t.x, _t.y, _t.z, tk, now);
     }
 
+    // re-entry: plasma glow at the nose when coming in very fast through thickening air
+    const heat = a.speed > 2000 ? Math.min(1, (a.speed - 2000) / 3000) * Math.min(1, (a.rho ?? 1) * 30) : 0;
+    if (heat > 0.05) {
+      a.forward(_f);
+      _t.copy(a.pos).addScaledVector(_f, info.length * 0.5);
+      fx.add.emit(_t.x, _t.y, _t.z, -_f.x * 40, -_f.y * 40, -_f.z * 40, 0.25, info.length * 0.5 * heat, info.length * 0.9 * heat, heat > 0.5 ? COL.fireHot : COL.fire, 0.8 * heat);
+    }
     const mach = a.speed / MACH;
     if (p.mach < 1 && mach >= 1 && this.mode !== 'menu') {
       fx.sonicBoom(a.pos, vel);

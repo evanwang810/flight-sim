@@ -86,7 +86,10 @@ export class Airframe {
     const broken = this.wingLost !== 0;
     const stalled = this.stalled || broken;
 
-    const qd = Math.min((v / s.vref) ** 2, s.qMax);
+    // air thins out above 5 km (normal flight never gets there; the rocket does)
+    const rho = this.pos.y < 5000 ? 1 : Math.exp(-(this.pos.y - 5000) / 7000);
+    this.rho = rho;
+    const qd = Math.min((v / s.vref) ** 2, s.qMax) * rho;
     const sq = Math.pow(qd, 0.3);
     const auth = (stalled ? s.stallCtrl : 1) * (broken ? 0.15 : 1);
 
@@ -182,7 +185,7 @@ export class Airframe {
       if (this.stalled && a <= s.aCrit && a >= s.aCritNeg) cl *= 0.75;
       if (broken) cl *= 0.35;
       cl *= 1 - 0.18 * dw;
-      const v2 = v * v;
+      const v2 = v * v * rho;
       _lift.copy(_up).addScaledVector(_vh, -_up.dot(_vh));
       const ll = _lift.length();
       if (ll > 1e-4) _f.addScaledVector(_lift, s.liftK * cl * v2 / ll);
@@ -193,7 +196,10 @@ export class Airframe {
       _f.addScaledVector(_right, -s.sideKK * this.beta * v2);
     }
     this.g = _f.dot(_up) / G;
-    _f.y -= G;
+    // gravity falls off with height and fast sideways flight curves around the planet:
+    // at about 7.9 km/s horizontal the two cancel and you are in orbit
+    const Rp = 6.371e6, rr = Rp + Math.max(0, this.pos.y);
+    _f.y -= G * (Rp / rr) ** 2 - (this.vel.x * this.vel.x + this.vel.z * this.vel.z) / rr;
     this.vel.addScaledVector(_f, dt);
     this.pos.addScaledVector(this.vel, dt);
   }

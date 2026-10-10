@@ -8,7 +8,10 @@ export const CELL = 16;
 export const CHUNK = 640;
 const SEG = CHUNK / CELL;
 const SEED = 1337;
-const SPACE = new THREE.Color(0x03040a);
+const SPACE = new THREE.Color(0x000000);
+// planet colours per map: land, second land tone, sea level (higher means more ocean)
+const PLANETS = { alpine: [0x3f5a32, 0x6a6a58, 0.5], canyon: [0x9a6e45, 0xc49a68, 0.47], archipelago: [0x3f7a35, 0x5f8f3e, 0.56], grid: [0x6d747c, 0x8a9099, 0.5] };
+const _pr = new THREE.Matrix4(), _pr2 = new THREE.Matrix4(), _c3 = new THREE.Color();
 // Terrain scale. The biome functions are tuned at 1.0; shrinking height and width together keeps the shapes
 // but puts ridges and valleys closer, which is what makes speed readable.
 export const TERRAIN_SCALE = 0.5;
@@ -86,40 +89,77 @@ uniform vec3 sunColor;
 uniform vec3 sunDir;
 uniform float camH;
 uniform float planetK;
+uniform float spaceK;
+uniform float time;
 uniform vec3 land;
+uniform vec3 land2;
 uniform vec3 sea;
+uniform float seaLevel;
+uniform mat3 planetRot;
 varying vec3 vDir;
-// cheap value noise on the sphere for continents and cloud bands
-float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-float n3(vec3 p) {
-  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+
+float h3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float n3(vec3 x) {
+  vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y),
              mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
+float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 6; i++) { s += a * n3(p); p = p * 2.13 + 7.1; a *= 0.5; } return s; }
+
+const float R = 6.371e6;
+const float ATM = 9.0e4;
+
 void main() {
   vec3 d = normalize(vDir);
   vec3 col = mix(horizon, zenith, pow(clamp(d.y, 0.0, 1.0), 0.55));
+  // stars once the air is gone
+  if (spaceK > 0.01) {
+    vec3 c = floor(d * 260.0);
+    float st = step(0.9965, h3(c)) * (0.35 + 0.65 * h3(c + 3.1));
+    col += vec3(st) * spaceK;
+  }
   float s = max(dot(d, sunDir), 0.0);
-  col += sunColor * (smoothstep(0.9993, 0.9996, s) * 1.5 + pow(s, 48.0) * 0.25 + pow(s, 5.0) * 0.08);
-  // fake planet below: ray against a sphere of radius R under the camera, faded in with altitude
+  col += sunColor * (smoothstep(0.9993, 0.9996, s) * (1.5 + spaceK * 2.0) + pow(s, 48.0) * 0.25 * (1.0 - spaceK * 0.7) + pow(s, 5.0) * 0.08 * (1.0 - spaceK));
+
   if (planetK > 0.0) {
-    const float R = 1.6e6;
-    float b = (R + camH) * d.y, c = camH * (2.0 * R + camH), disc = b * b - c;
-    float rim = 0.0;
+    float h = camH;
+    float b = (R + h) * d.y, cc = h * (2.0 * R + h), disc = b * b - cc;
     if (d.y < 0.0 && disc > 0.0) {
       float t = -b - sqrt(disc);
-      vec3 n = vec3(d.x * t, R + camH + d.y * t, d.z * t) / R;
-      vec3 q = n * 9.0;
-      float cont = n3(q) * 0.55 + n3(q * 2.3) * 0.3 + n3(q * 5.1) * 0.15;
-      vec3 surf = mix(sea, land, smoothstep(0.5, 0.56, cont));
-      float cloud = smoothstep(0.55, 0.75, n3(n * 14.0 + vec3(3.0)) * 0.6 + n3(n * 31.0) * 0.4);
-      surf = mix(surf, vec3(0.95), cloud * 0.8);
-      float lit = max(dot(n, sunDir), 0.0) * 0.9 + 0.08;
-      float limb = pow(1.0 - max(dot(n, -d), 0.0), 3.0);
-      vec3 p = surf * lit + vec3(0.35, 0.55, 1.0) * limb * 0.6;
-      col = mix(col, p, planetK);
-    } else rim = exp(-max(disc < 0.0 ? sqrt(-disc) : 0.0, 0.0) / (R * 0.02));
-    col += vec3(0.3, 0.5, 1.0) * rim * 0.5 * planetK * step(disc, 0.0);
+      vec3 n = vec3(d.x * t, R + h + d.y * t, d.z * t) / R;
+      vec3 w = planetRot * n;
+      // continents from warped fbm, ice toward the poles, a drier band near the equator
+      vec3 q = w * 2.6;
+      q += vec3(fbm(q + 1.7), fbm(q + 9.2), fbm(q + 4.4)) * 0.8;
+      float e = fbm(q);
+      float ice = smoothstep(0.8, 0.92, abs(w.z) + (fbm(w * 9.0) - 0.5) * 0.15);
+      vec3 ground = mix(land, land2, smoothstep(0.35, 0.75, fbm(w * 7.0 + 3.0)));
+      ground = mix(ground, vec3(0.62, 0.52, 0.36), smoothstep(0.6, 1.0, 1.0 - abs(w.z) * 3.5) * 0.45);
+      float coast = smoothstep(seaLevel - 0.008, seaLevel + 0.012, e);
+      vec3 ocean = mix(sea * 0.7, sea * 1.5 + vec3(0.02, 0.09, 0.07), smoothstep(seaLevel - 0.06, seaLevel, e));
+      vec3 surf = mix(mix(ocean, ground, coast), vec3(0.92, 0.95, 0.98), ice);
+      float sl = dot(n, sunDir);
+      float day = smoothstep(-0.12, 0.25, sl);
+      vec3 rf = reflect(d, n);
+      float glint = pow(max(dot(rf, sunDir), 0.0), 60.0) * (1.0 - coast) * (1.0 - ice) * day;
+      vec3 lit = surf * (0.03 + 0.97 * max(sl, 0.0) * day) + sunColor * glint * 0.8;
+      float cl = smoothstep(0.6, 0.78, fbm(w * 6.5 + vec3(time * 0.004, 0.0, time * 0.002)));
+      lit = mix(lit, vec3(0.05 + 0.9 * max(sl, 0.0) * day), cl * 0.75);
+      // atmosphere: thicker toward the limb, warm along the terminator
+      float mu = max(dot(n, -d), 0.0);
+      float haze = pow(1.0 - mu, 2.5);
+      vec3 atm = mix(vec3(0.35, 0.55, 1.0), vec3(1.0, 0.55, 0.3), smoothstep(0.25, -0.05, sl) * day);
+      lit = mix(lit, atm * (0.12 + 0.88 * day), haze * 0.5);
+      // low down, blend toward the ordinary sky colour so the hand-off from the terrain is soft
+      lit = mix(lit, horizon, (1.0 - spaceK) * 0.3);
+      col = mix(col, lit, planetK);
+    } else if (spaceK > 0.01) {
+      // thin glowing shell above the limb
+      float closest = (R + h) * sqrt(max(0.0, 1.0 - d.y * d.y));
+      float above = d.y < 0.0 ? closest - R : h;
+      float glow = exp(-max(above, 0.0) / (ATM * 0.3));
+      col += vec3(0.32, 0.55, 1.0) * glow * planetK * spaceK;
+    }
   }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -306,7 +346,9 @@ export class World {
     this.skyU = {
       zenith: { value: new THREE.Color() }, horizon: { value: new THREE.Color() },
       sunColor: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) },
-      camH: { value: 0 }, planetK: { value: 0 }, land: { value: new THREE.Color(0x4f6b3a) }, sea: { value: new THREE.Color(0x123c66) },
+      camH: { value: 0 }, planetK: { value: 0 }, spaceK: { value: 0 }, time: { value: 0 }, seaLevel: { value: 0.5 },
+      land: { value: new THREE.Color(0x4f6b3a) }, land2: { value: new THREE.Color(0x6b6a4a) }, sea: { value: new THREE.Color(0x0f3557) },
+      planetRot: { value: new THREE.Matrix3() },
     };
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12),
       new THREE.ShaderMaterial({ vertexShader: skyVert, fragmentShader: skyFrag, uniforms: this.skyU, side: THREE.BackSide, depthWrite: false, fog: false }));
@@ -344,6 +386,7 @@ export class World {
     scene.add(this.water, this.waterFar);
 
     this.trees = null;
+    this.planetOff = new THREE.Vector2();
     this.treesDirty = false;
     this.wall = null;
 
@@ -374,7 +417,11 @@ export class World {
     const s = this.map.sky;
     this.skyU.zenith.value.setHex(s.zenith);
     this.skyU.horizon.value.setHex(s.horizon);
-    this.base = { zenith: this.skyU.zenith.value.clone(), horizon: this.skyU.horizon.value.clone(), fog: new THREE.Color(s.horizon) };
+    this.base = { zenith: this.skyU.zenith.value.clone(), horizon: this.skyU.horizon.value.clone(), fog: new THREE.Color(s.horizon), hemi: this.hemi.intensity };
+    this.spaceK = -1;
+    // the planet seen from orbit takes its colours from the map you left
+    const P = PLANETS[this.mapId] || PLANETS.alpine;
+    this.skyU.land.value.setHex(P[0]); this.skyU.land2.value.setHex(P[1]); this.skyU.seaLevel.value = P[2];
     this.skyU.sunColor.value.setHex(s.sunColor);
     this.skyU.sunDir.value.set(...s.sun).normalize();
     this.sun.color.setHex(s.sunColor);
@@ -613,16 +660,22 @@ export class World {
 
   update(dt, camera, budgetMs = 2.5) {
     const cp = camera.position;
-    this.skyU.camH.value = Math.max(0, cp.y);
-    this.skyU.planetK.value = smoothstep(7000, 18000, cp.y);
+    const U = this.skyU;
+    U.camH.value = Math.max(0, cp.y);
+    U.time.value += dt;
+    U.planetK.value = smoothstep(2500, 14000, cp.y);
+    // the planet scrolls under you by however far you have really travelled (see game.planetOff)
+    const R = 6.371e6, lon = (cp.x + this.planetOff.x) / R, lat = (cp.z + this.planetOff.y) / R;
+    U.planetRot.value.setFromMatrix4(_pr.makeRotationZ(-lon).multiply(_pr2.makeRotationX(lat)));
     if (this.base) {
-      const k = smoothstep(9000, 70000, cp.y);
-      if (k !== this.spaceK) {
+      const k = smoothstep(8000, 50000, cp.y);
+      if (Math.abs(k - this.spaceK) > 1e-4) {
         this.spaceK = k;
-        const dark = SPACE;
-        this.skyU.zenith.value.copy(this.base.zenith).lerp(dark, k);
-        this.skyU.horizon.value.copy(this.base.horizon).lerp(dark, k * 0.85);
-        this.scene.fog.color.copy(this.base.fog).lerp(dark, k * 0.85);
+        U.spaceK.value = k;
+        U.zenith.value.copy(this.base.zenith).lerp(SPACE, Math.min(1, k * 1.15));
+        U.horizon.value.copy(this.base.horizon).lerp(SPACE, k);
+        this.scene.fog.color.copy(this.base.fog).lerp(_c3.setHex(PLANETS[this.mapId]?.[0] ?? 0x4f6b3a).multiplyScalar(0.6), U.planetK.value * 0.6).lerp(SPACE, k);
+        this.hemi.intensity = this.base.hemi * (1 - 0.85 * k);
       }
     }
     this.sky.position.copy(cp);
