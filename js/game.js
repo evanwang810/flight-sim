@@ -479,7 +479,7 @@ export class Game {
 
   // Thin air above the ceiling: the engine fades and climbs die out. Outside the arena wall a countdown runs.
   limits(p, dt) {
-    const over = p.air.pos.y - (p.spec.rocket ? 400000 : this.ceiling);
+    const over = p.air.pos.y - (p.spec.rocket ? Infinity : this.ceiling);
     // the pilot is the limit: sustained high g greys you out and then blacks you out for a moment
     if (p.isMe && !p.spec.rocket && !p.overdrive) {
       const g = p.air.g;
